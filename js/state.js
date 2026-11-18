@@ -42,6 +42,7 @@ const DEFAULT_STATE = {
     item_inquisitor_badge: { unlocked: true, isNew: false, unlockedAt: Date.now() },
     magic_resonance: { unlocked: true, isNew: false, unlockedAt: Date.now() }
   },
+  unlockedTileRecords: {},
   discoveredLocations: ['loc_library'],
   flags: {},
   collectedHotspots: [],
@@ -93,6 +94,10 @@ class GameState {
           unlockedCodex: {
             ...DEFAULT_STATE.unlockedCodex,
             ...(parsed.unlockedCodex || {})
+          },
+          unlockedTileRecords: {
+            ...DEFAULT_STATE.unlockedTileRecords,
+            ...(parsed.unlockedTileRecords || {})
           }
         };
       }
@@ -199,6 +204,17 @@ class GameState {
 
   // --- Inventory Management ---
 
+  getInventoryCapacity() {
+    return this.data.inventoryCapacity || 7;
+  }
+
+  setInventoryCapacity(capacity) {
+    this.data.inventoryCapacity = capacity;
+    this.save();
+    this.emit('inventoryChanged', this.data.inventory);
+    this.emit('change', this.data);
+  }
+
   getInventory() {
     return this.data.inventory;
   }
@@ -259,6 +275,60 @@ class GameState {
     return Boolean(this.data.unlockedCodex[codexId] && this.data.unlockedCodex[codexId].unlocked);
   }
 
+  isClueConditionUnlocked(conditionId) {
+    if (!conditionId) return false;
+    return Boolean(
+      this.data.unlockedCodex[conditionId]?.unlocked ||
+      this.data.flags?.[`clue_cond_${conditionId}`] ||
+      this.data.flags?.[conditionId]
+    );
+  }
+
+  isTileRecordUnlocked(recordId) {
+    if (!recordId) return false;
+    return Boolean(
+      this.data.unlockedTileRecords?.[recordId]?.unlocked ||
+      this.data.flags?.[`tile_rec_${recordId}`] ||
+      this.data.flags?.[recordId]
+    );
+  }
+
+  unlockTileRecord(recordId, { tileId = null, text = null } = {}) {
+    if (!recordId) return false;
+    this.data.unlockedTileRecords ||= {};
+    this.data.flags ||= {};
+    this.data.flags[`tile_rec_${recordId}`] = true;
+
+    if (!this.data.unlockedTileRecords[recordId]) {
+      this.data.unlockedTileRecords[recordId] = {
+        unlocked: true,
+        isNew: true,
+        tileId,
+        text,
+        unlockedAt: Date.now()
+      };
+      this.save();
+      this.emit('tileRecordUnlocked', { recordId, tileId, text });
+      this.emit('change', this.data);
+      return true;
+    }
+    return false;
+  }
+
+  getUnlockedTileRecords() {
+    return this.data.unlockedTileRecords || {};
+  }
+
+  unlockClueCondition(conditionId) {
+    if (!conditionId) return false;
+    this.data.flags ||= {};
+    this.data.flags[`clue_cond_${conditionId}`] = true;
+    this.unlockCodex(conditionId);
+    this.emit('clueConditionUnlocked', conditionId);
+    this.emit('change', this.data);
+    return true;
+  }
+
   unlockCodex(codexId) {
     if (!this.data.unlockedCodex[codexId]) {
       this.data.unlockedCodex[codexId] = {
@@ -275,16 +345,58 @@ class GameState {
   }
 
   markCodexRead(codexId) {
+    if (!codexId) return;
+    let changed = false;
     if (this.data.unlockedCodex[codexId] && this.data.unlockedCodex[codexId].isNew) {
       this.data.unlockedCodex[codexId].isNew = false;
-      this.save();
+      changed = true;
       this.emit('codexRead', codexId);
+    }
+    if (this.data.unlockedTileRecords) {
+      Object.entries(this.data.unlockedTileRecords).forEach(([recId, rec]) => {
+        if ((recId === codexId || rec.tileId === codexId) && rec.isNew) {
+          rec.isNew = false;
+          changed = true;
+        }
+      });
+    }
+    if (changed) {
+      this.save();
+      this.emit('change', this.data);
+    }
+  }
+
+  markTileRecordRead(recordId) {
+    if (!recordId) return;
+    if (this.data.unlockedTileRecords?.[recordId]?.isNew) {
+      this.data.unlockedTileRecords[recordId].isNew = false;
+      this.save();
+      this.emit('tileRecordRead', recordId);
+      this.emit('change', this.data);
+    }
+  }
+
+  markAllTileRecordsReadForTile(tileId) {
+    if (!tileId) return;
+    let changed = false;
+    if (this.data.unlockedTileRecords) {
+      Object.entries(this.data.unlockedTileRecords).forEach(([recId, rec]) => {
+        if ((rec.tileId === tileId || recId === tileId) && rec.isNew) {
+          rec.isNew = false;
+          changed = true;
+        }
+      });
+    }
+    if (changed) {
+      this.save();
       this.emit('change', this.data);
     }
   }
 
   getUnreadCodexCount() {
-    return Object.values(this.data.unlockedCodex).filter(c => c.unlocked && c.isNew).length;
+    const unreadCodex = Object.values(this.data.unlockedCodex || {}).filter(c => c.unlocked && c.isNew).length;
+    const unreadRecords = Object.values(this.data.unlockedTileRecords || {}).filter(r => r.unlocked && r.isNew).length;
+    return unreadCodex + unreadRecords;
   }
 
   // --- Flags & Stats ---

@@ -186,8 +186,8 @@ export class GameEngine {
       <div class="novel-paragraphs">
     `;
 
-    node.paragraphs.forEach((p) => {
-      html += `<p class="novel-p">${escapeHtml(p)}</p>`;
+    node.paragraphs.forEach((p, idx) => {
+      html += this.parseStoryParagraph(p, idx, node.id);
     });
 
     html += `</div><section class="story-choices-container"><h3 class="choices-heading">선택지</h3><div class="choices-list">`;
@@ -201,6 +201,12 @@ export class GameEngine {
         : '';
 
       const lockIcon = evaluation.met ? '➔' : '🔒';
+      const tooltipBubble = choice.desc
+        ? `<div class="choice-tooltip-bubble" role="tooltip">${escapeHtml(choice.desc)}</div>`
+        : '';
+      const hintBadge = choice.desc
+        ? `<span class="choice-hint-badge" title="상세 설명 보기">ℹ️ 힌트</span>`
+        : '';
 
       html += `
         <button type="button" class="story-choice-btn ${disabledClass}" data-choice-index="${index}" ${disabledAttr}>
@@ -208,6 +214,12 @@ export class GameEngine {
             <span class="choice-marker">${lockIcon}</span>
             <span class="choice-text">${escapeHtml(choice.text)}</span>
           </div>
+          ${choice.desc ? `
+            <div class="choice-desc-subline">
+              <span class="choice-desc-icon">💬</span>
+              <span class="choice-desc-text" data-typewriter="${escapeHtml(choice.desc)}"></span>
+            </div>
+          ` : ''}
           ${badgeHtml}
           ${!evaluation.met ? `<div class="choice-unmet-reason">${escapeHtml(evaluation.reason)}</div>` : ''}
         </button>
@@ -217,6 +229,33 @@ export class GameEngine {
     html += `</div></section>`;
     contentContainer.innerHTML = html;
 
+    const typewriters = contentContainer.querySelectorAll('.choice-desc-text[data-typewriter]');
+    typewriters.forEach((el, tIdx) => {
+      const fullText = el.getAttribute('data-typewriter') || '';
+      el.textContent = '';
+      let charIdx = 0;
+      const startDelay = 120 + tIdx * 100;
+      setTimeout(() => {
+        const cursor = document.createElement('span');
+        cursor.className = 'choice-typewriter-cursor';
+        cursor.textContent = '|';
+        el.appendChild(cursor);
+
+        const timer = setInterval(() => {
+          if (charIdx < fullText.length) {
+            cursor.before(fullText.charAt(charIdx));
+            charIdx++;
+          } else {
+            clearInterval(timer);
+            setTimeout(() => {
+              cursor.style.opacity = '0';
+              setTimeout(() => cursor.remove(), 400);
+            }, 800);
+          }
+        }, 22);
+      }, startDelay);
+    });
+
     const choiceButtons = contentContainer.querySelectorAll('.story-choice-btn');
     choiceButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -224,6 +263,397 @@ export class GameEngine {
         this.selectChoice(node, idx);
       });
     });
+  }
+
+  parseStoryParagraph(p, index, nodeId) {
+    const trimmed = String(p ?? '').trim();
+
+    // Check item tag: [아이템: itemId_or_name | desc | icon]
+    const itemMatch = trimmed.match(/^\[(?:아이템|ITEM)\s*:\s*(.+?)\]$/i);
+    if (itemMatch) {
+      const parts = itemMatch[1].split('|').map(s => s.trim());
+      const rawIdOrName = parts[0] || '미확인 물품';
+      
+      const existing = INVENTORY_ITEMS.find(i => i.id === rawIdOrName || i.name === rawIdOrName);
+      const itemId = existing ? existing.id : (rawIdOrName.startsWith('item_') ? rawIdOrName : `item_${rawIdOrName.replace(/\s+/g, '_')}`);
+      const itemName = existing ? existing.name : rawIdOrName;
+      const itemDesc = parts[1] || (existing ? existing.desc : '새로운 소지품을 획득했습니다.');
+      const itemIcon = parts[2] || (existing ? existing.icon : '🎁');
+
+      const eventKey = `event_item_${nodeId}_${index}_${itemId}`;
+      const isNew = !state.getFlag(eventKey);
+
+      if (isNew) {
+        state.setFlag(eventKey, true);
+        state.addItem({
+          id: itemId,
+          name: itemName,
+          desc: itemDesc,
+          icon: itemIcon,
+          quantity: 1,
+          type: existing ? existing.type : 'item'
+        });
+        this.playAudio('itemPickup');
+        this.showToast(`[${itemName}] 소지품을 획득했습니다!`, 'success', itemIcon.includes('/') ? '🎁' : itemIcon);
+      }
+
+      return `
+        <div class="story-game-widget widget-item ${isNew ? 'is-new-anim' : ''}">
+          <div class="widget-header">
+            <span class="widget-badge">🎁 아이템 획득</span>
+            <span class="widget-status">${isNew ? '✨ 새로운 소지품!' : '✔️ 획득 완료'}</span>
+          </div>
+          <div class="widget-body">
+            <div class="widget-icon">${escapeHtml(itemIcon)}</div>
+            <div class="widget-details">
+              <strong class="widget-name">${escapeHtml(itemName)}</strong>
+              <p class="widget-desc">${escapeHtml(itemDesc)}</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Check stat tag: [스탯: statName +/-amount | desc]
+    const statMatch = trimmed.match(/^\[(?:스탯|STAT)\s*:\s*(.+?)\]$/i);
+    if (statMatch) {
+      const parts = statMatch[1].split('|').map(s => s.trim());
+      const statExpression = parts[0] || '마력 +1';
+      const statDesc = parts[1] || '능력치에 변화가 생겼습니다.';
+
+      const expMatch = statExpression.match(/^([^\s+-]+)\s*([+-]?\d+)/);
+      let statKey = 'magic';
+      let delta = 1;
+      let statLabel = '마력';
+
+      const statMap = {
+        '마력': 'magic', 'magic': 'magic',
+        '관찰력': 'perception', 'perception': 'perception',
+        '화술': 'persuasion', 'persuasion': 'persuasion',
+        '체력': 'stamina', 'stamina': 'stamina'
+      };
+      const labelMap = {
+        'magic': '마력',
+        'perception': '관찰력',
+        'persuasion': '화술',
+        'stamina': '체력'
+      };
+
+      if (expMatch) {
+        const rawStat = expMatch[1].trim();
+        statKey = statMap[rawStat] || 'magic';
+        delta = parseInt(expMatch[2], 10) || 1;
+        statLabel = labelMap[statKey] || rawStat;
+      }
+
+      const eventKey = `event_stat_${nodeId}_${index}_${statKey}`;
+      const isNew = !state.getFlag(eventKey);
+
+      let currentVal = state.getPlayer()?.stats?.[statKey] ?? 0;
+      if (isNew) {
+        state.setFlag(eventKey, true);
+        currentVal = state.modifyStat(statKey, delta);
+        this.playAudio('codexUnlock');
+        this.showToast(`[${statLabel} ${sign}] 능력이 변동되었습니다!`, 'info', '⚡');
+      }
+
+      const sign = delta >= 0 ? `+${delta}` : `${delta}`;
+      return `
+        <div class="story-game-widget widget-stat ${isNew ? 'is-new-anim' : ''}">
+          <div class="widget-header">
+            <span class="widget-badge">⚡ 능력치 변동</span>
+            <span class="widget-status">${isNew ? '✨ 스탯 갱신!' : '✔️ 반영 완료'}</span>
+          </div>
+          <div class="widget-body">
+            <div class="widget-icon">📈</div>
+            <div class="widget-details">
+              <strong class="widget-name">${escapeHtml(statLabel)} <span class="stat-delta ${delta >= 0 ? 'delta-pos' : 'delta-neg'}">${sign}</span></strong>
+              <p class="widget-desc">${escapeHtml(statDesc)} (현재: ${currentVal})</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Check character tag: [인물: charName_or_id | desc | icon]
+    const charMatch = trimmed.match(/^\[(?:인물|캐릭터|CHARACTER|PERSON)\s*:\s*(.+?)\]$/i);
+    if (charMatch) {
+      const parts = charMatch[1].split('|').map(s => s.trim());
+      const rawIdOrName = parts[0] || '미지의 인물';
+      const existing = CODEX_DATA.find(c => c.category === 'character' && (c.id === rawIdOrName || c.title === rawIdOrName || (c.keywords && c.keywords.includes(rawIdOrName))));
+      const charId = existing ? existing.id : (rawIdOrName.startsWith('char_') ? rawIdOrName : `char_${rawIdOrName.replace(/\s+/g, '_')}`);
+      const charName = existing ? existing.title : rawIdOrName;
+      const charDesc = parts[1] || (existing ? (existing.summary || existing.description) : '새로운 인물과 조우했습니다.');
+      const charIcon = parts[2] || (existing ? existing.icon : '👤');
+
+      if (!existing) {
+        CODEX_DATA.push({
+          id: charId,
+          category: 'character',
+          title: charName,
+          icon: charIcon,
+          summary: charDesc,
+          description: parts[1] || charDesc,
+          relatedEpisode: 'ep1',
+          unlockedByDefault: false,
+          keywords: [charName]
+        });
+      }
+
+      const eventKey = `event_char_${nodeId}_${index}_${charId}`;
+      const isNew = !state.getFlag(eventKey);
+
+      if (isNew) {
+        state.setFlag(eventKey, true);
+        state.unlockCodex(charId);
+        this.playAudio('codexUnlock');
+        this.showToast(`[${charName}] 인물 도감에 새로운 인물이 등록되었습니다!`, 'info', charIcon.includes('/') ? '👤' : charIcon);
+      }
+
+      return `
+        <div class="story-game-widget widget-character ${isNew ? 'is-new-anim' : ''}">
+          <div class="widget-header">
+            <span class="widget-badge" style="background:#1E293B; color:#60A5FA; border:1px solid rgba(96, 165, 250, 0.4);">👤 인물 등록</span>
+            <span class="widget-status">${isNew ? '✨ 새 인물 등록!' : '✔️ 도감 등록됨'}</span>
+          </div>
+          <div class="widget-body">
+            <div class="widget-icon" style="background:rgba(30, 41, 59, 0.85); color:#60A5FA; border-radius:50%; width:44px; height:44px; display:grid; place-items:center; font-size:22px; border:2px solid #60A5FA; overflow:hidden;">${charIcon.includes('/') ? `<img src="${escapeHtml(charIcon)}" style="width:100%; height:100%; object-fit:contain; border-radius:50%;">` : escapeHtml(charIcon)}</div>
+            <div class="widget-details">
+              <strong class="widget-name">${escapeHtml(charName)}</strong>
+              <p class="widget-desc">${escapeHtml(charDesc)}</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Check topic tag: [주제: topicTitle_or_id | desc | icon]
+    const topicMatch = trimmed.match(/^\[(?:주제|TOPIC)\s*:\s*(.+?)\]$/i);
+    if (topicMatch) {
+      const parts = topicMatch[1].split('|').map(s => s.trim());
+      const rawIdOrTitle = parts[0] || '미지의 사건';
+      const existing = CODEX_DATA.find(c => c.id === rawIdOrTitle || c.title === rawIdOrTitle);
+      const topicId = existing ? existing.id : (rawIdOrTitle.startsWith('clue_') ? rawIdOrTitle : `clue_${rawIdOrTitle.replace(/\s+/g, '_')}`);
+      const topicTitle = existing ? existing.title : (parts[1] || rawIdOrTitle);
+      const topicDesc = parts[2] || (existing ? (existing.summary || existing.description) : '새로운 수사 주제가 등록되었습니다.');
+      const topicIcon = parts[3] || (existing ? existing.icon : '🗂️');
+
+      const eventKey = `event_topic_${nodeId}_${index}_${topicId}`;
+      const isNew = !state.getFlag(eventKey);
+
+      if (isNew) {
+        state.setFlag(eventKey, true);
+        state.unlockCodex(topicId);
+        this.playAudio('codexUnlock');
+      }
+
+      return `
+        <div class="story-game-widget widget-topic ${isNew ? 'is-new-anim' : ''}">
+          <div class="widget-header">
+            <span class="widget-badge" style="background:#1E293B; color:#F59E0B; border:1px solid rgba(245, 158, 11, 0.4);">🗂️ 수사 주제 등록</span>
+            <span class="widget-status">${isNew ? '✨ 새 주제!' : '✔️ 수첩 등록됨'}</span>
+          </div>
+          <div class="widget-body">
+            <div class="widget-icon">${escapeHtml(topicIcon)}</div>
+            <div class="widget-details">
+              <strong class="widget-name">${escapeHtml(topicTitle)}</strong>
+              <p class="widget-desc">${escapeHtml(topicDesc)}</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Check clue tag: [단서: clueName | parentTopic | desc]
+    const clueMatch = trimmed.match(/^\[(?:단서|CLUE|조건|단서조건)\s*:\s*(.+?)\]$/i);
+    if (clueMatch) {
+      const parts = clueMatch[1].split('|').map(s => s.trim());
+      const rawClueName = parts[0];
+      const parentName = parts[1] || '';
+      const clueDesc = parts[2] || '';
+
+      // Find matching subClue across CODEX_DATA
+      let matchedParent = null;
+      let matchedClue = null;
+
+      for (const entry of CODEX_DATA) {
+        if (parentName && entry.title !== parentName && entry.id !== parentName) continue;
+        const found = (entry.subClues || []).find(sc => sc.id === rawClueName || sc.label === rawClueName);
+        if (found) {
+          matchedParent = entry;
+          matchedClue = found;
+          break;
+        }
+      }
+
+      if (!matchedClue) {
+        for (const entry of CODEX_DATA) {
+          const found = (entry.subClues || []).find(sc => sc.id === rawClueName || sc.label === rawClueName);
+          if (found) {
+            matchedParent = entry;
+            matchedClue = found;
+            break;
+          }
+        }
+      }
+
+      // If not a subClue, check if matching a major entry
+      if (!matchedClue) {
+        const majorEntry = CODEX_DATA.find(c => c.id === rawClueName || c.title === rawClueName);
+        if (majorEntry) {
+          const topicId = majorEntry.id;
+          const eventKey = `event_clue_${nodeId}_${index}_${topicId}`;
+          const isNew = !state.getFlag(eventKey);
+          if (isNew) {
+            state.setFlag(eventKey, true);
+            state.unlockCodex(topicId);
+            this.playAudio('codexUnlock');
+          }
+          return `
+            <div class="story-game-widget widget-topic ${isNew ? 'is-new-anim' : ''}">
+              <div class="widget-header">
+                <span class="widget-badge" style="background:#1E293B; color:#F59E0B; border:1px solid rgba(245, 158, 11, 0.4);">🗂️ 수사 주제 등록</span>
+                <span class="widget-status">${isNew ? '✨ 새 주제!' : '✔️ 수첩 등록됨'}</span>
+              </div>
+              <div class="widget-body">
+                <div class="widget-icon">${escapeHtml(majorEntry.icon || '🗂️')}</div>
+                <div class="widget-details">
+                  <strong class="widget-name">${escapeHtml(majorEntry.title)}</strong>
+                  <p class="widget-desc">${escapeHtml(parts[1] || majorEntry.summary || majorEntry.description)}</p>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      const clueId = matchedClue ? matchedClue.id : (rawClueName.startsWith('sc_') ? rawClueName : `sc_${rawClueName.replace(/\s+/g, '_')}`);
+      const clueLabel = matchedClue ? matchedClue.label : rawClueName;
+      const displayParentTitle = matchedParent ? matchedParent.title : (parentName || '수사 주제');
+      const displayDesc = clueDesc || (matchedClue ? (matchedClue.desc || matchedClue.conditionDesc) : '수사에 필요한 새로운 단서를 획득했습니다.');
+
+      const eventKey = `event_cluecond_${nodeId}_${index}_${clueId}`;
+      const isNew = !state.getFlag(eventKey);
+
+      if (isNew) {
+        state.setFlag(eventKey, true);
+        state.unlockClueCondition(clueId);
+        if (matchedParent) {
+          state.unlockCodex(matchedParent.id);
+        }
+        this.playAudio('codexUnlock');
+      }
+
+      return `
+        <div class="story-game-widget widget-clue ${isNew ? 'is-new-anim' : ''}">
+          <div class="widget-header">
+            <span class="widget-badge" style="background:#2D323F; color:#D4AF37; border:1px solid rgba(212, 175, 55, 0.6);">🔘 단서 발견</span>
+            <span class="widget-status">${isNew ? '✨ 새 단서 획득!' : '✔️ 메모 보드 등록됨'}</span>
+          </div>
+          <div class="widget-body">
+            <div class="widget-icon" style="background:rgba(45, 50, 63, 0.85); color:#D4AF37; border-radius:50%; width:44px; height:44px; display:grid; place-items:center; font-size:20px; border:2px solid #D4AF37;">🔘</div>
+            <div class="widget-details">
+              <strong class="widget-name">${escapeHtml(clueLabel)} <span style="font-size:11px; font-weight:600; padding:2px 6px; background:rgba(0,0,0,0.25); border-radius:4px; color:var(--text-muted); margin-left:6px;">주제: ${escapeHtml(displayParentTitle)}</span></strong>
+              <p class="widget-desc">${escapeHtml(displayDesc)}</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Check tile record tag: [기록: tileName | recordId | text] or [기록: tileName | text] or [기록: recordId]
+    const recordMatch = trimmed.match(/^\[(?:기록|정보|RECORD|INFO)\s*:\s*(.+?)\]$/i);
+    if (recordMatch) {
+      const parts = recordMatch[1].split('|').map(s => s.trim());
+      let targetTile = null;
+      let targetRecord = null;
+      let recordId = '';
+      let recordText = '';
+
+      if (parts.length === 1) {
+        const query = parts[0];
+        for (const entry of CODEX_DATA) {
+          for (const sub of (entry.subItems || [])) {
+            const rec = (sub.records || []).find(r => r.id === query);
+            if (rec) {
+              targetTile = sub;
+              targetRecord = rec;
+              recordId = rec.id;
+              recordText = rec.text;
+              break;
+            }
+          }
+          if (targetTile) break;
+        }
+        if (!targetTile) {
+          recordId = `rec_${query.replace(/\s+/g, '_')}`;
+          recordText = query;
+        }
+      } else if (parts.length === 2) {
+        const tileQuery = parts[0];
+        const detailQuery = parts[1];
+        for (const entry of CODEX_DATA) {
+          const sub = (entry.subItems || []).find(s => s.id === tileQuery || s.label === tileQuery);
+          if (sub) {
+            targetTile = sub;
+            const rec = (sub.records || []).find(r => r.id === detailQuery);
+            if (rec) {
+              targetRecord = rec;
+              recordId = rec.id;
+              recordText = rec.text;
+            } else {
+              recordId = `rec_${tileQuery}_${detailQuery.slice(0, 10).replace(/\s+/g, '_')}`;
+              recordText = detailQuery;
+            }
+            break;
+          }
+        }
+        if (!targetTile) {
+          recordId = `rec_${tileQuery}_${detailQuery.slice(0, 10).replace(/\s+/g, '_')}`;
+          recordText = detailQuery;
+        }
+      } else {
+        const tileQuery = parts[0];
+        for (const entry of CODEX_DATA) {
+          const sub = (entry.subItems || []).find(s => s.id === tileQuery || s.label === tileQuery);
+          if (sub) { targetTile = sub; break; }
+        }
+        recordId = parts[1];
+        recordText = parts[2];
+      }
+
+      const eventKey = `event_rec_${nodeId}_${index}_${recordId}`;
+      const isNew = !state.getFlag(eventKey);
+
+      if (isNew) {
+        state.setFlag(eventKey, true);
+        state.unlockTileRecord(recordId, {
+          tileId: targetTile ? targetTile.id : parts[0],
+          text: recordText
+        });
+        this.playAudio('codexUnlock');
+      }
+
+      const targetTileLabel = targetTile ? targetTile.label : parts[0];
+
+      return `
+        <div class="story-game-widget widget-record ${isNew ? 'is-new-anim' : ''}">
+          <div class="widget-header">
+            <span class="widget-badge" style="background:#1E293B; color:#60A5FA; border:1px solid rgba(96, 165, 250, 0.4);">📝 추가 조사 기록</span>
+            <span class="widget-status">${isNew ? '✨ 새 정보 기록!' : '✔️ 수첩에 기록됨'}</span>
+          </div>
+          <div class="widget-body">
+            <div class="widget-icon" style="background:rgba(30, 41, 59, 0.85); color:#60A5FA; border-radius:50%; width:44px; height:44px; display:grid; place-items:center; font-size:20px; border:2px solid #60A5FA;">📝</div>
+            <div class="widget-details">
+              <strong class="widget-name">${escapeHtml(targetTileLabel)}</strong>
+              <p class="widget-desc">${escapeHtml(recordText)}</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    return `<p class="novel-p">${escapeHtml(p)}</p>`;
   }
 
   evaluateCondition(condition) {
@@ -368,6 +798,16 @@ export class GameEngine {
 
   renderSceneIllustration(scene) {
     if (!this.sceneCanvas) return;
+
+    if (scene.bgImage) {
+      this.sceneCanvas.innerHTML = `
+        <div class="investigation-bg-wrapper">
+          <img src="${escapeHtml(scene.bgImage)}" alt="${escapeHtml(scene.title)}" class="investigation-bg-image" />
+          <div class="investigation-bg-vignette"></div>
+        </div>
+      `;
+      return;
+    }
 
     const sketches = {
       library: `
@@ -517,11 +957,24 @@ export class GameEngine {
       ? hs.memoId
       : (hs.codexId || hs.unlockedCodexId || (hs.type === 'character' ? hs.characterId : ''));
 
-    if (hs.type === 'character') {
-      if (linkedMemoId && state.unlockCodex(linkedMemoId)) {
+    // 탐사 핫스팟에 연결된 세부 타일 추가 기록 해금 검사
+    const targetRecordId = hs.recordId || hs.unlockedRecordId;
+    if (targetRecordId) {
+      if (state.unlockTileRecord(targetRecordId, { tileId: hs.tileId, text: hs.recordText })) {
         this.playAudio('codexUnlock');
+        this.showToast('📝 새로운 조사 기록이 세부 타일에 추가되었습니다!', 'info', '📝');
       }
-      this.openCharacterDialogue(hs);
+    }
+
+    if (hs.type === 'character') {
+      const isAlreadyUnlocked = linkedMemoId ? state.isCodexUnlocked(linkedMemoId) : false;
+      let isFirstEncounter = false;
+      if (linkedMemoId) {
+        isFirstEncounter = state.unlockCodex(linkedMemoId);
+      }
+      this.playAudio('codexUnlock');
+      this.showToast(`[${hs.characterName || '인물'}] 인물 도감에 등록되었습니다!`, 'success', (hs.icon && !hs.icon.includes('/')) ? hs.icon : '👤');
+      this.openCharacterDialogue(hs, isFirstEncounter || !isAlreadyUnlocked);
       return;
     }
 
@@ -647,15 +1100,54 @@ export class GameEngine {
     }
   }
 
-  openCharacterDialogue(hs) {
+  openCharacterDialogue(hs, isFirstEncounter = false) {
     if (!this.dialogueModal) return;
     this.currentDialogueTree = hs.dialogueTree;
     this.currentDialogueNodeKey = 'start';
 
     const charNameEl = document.getElementById('dialogue-char-name');
     const charRoleEl = document.getElementById('dialogue-char-role');
+    const avatarEl = document.querySelector('.dialogue-avatar');
+    const badgeEl = document.getElementById('dialogue-char-badge');
+    const widgetEl = document.getElementById('dialogue-new-char-widget');
+
     if (charNameEl) charNameEl.textContent = hs.characterName;
     if (charRoleEl) charRoleEl.textContent = hs.characterRole;
+    const avatarSrc = hs.avatar || (hs.icon && hs.icon.includes('/') ? hs.icon : (hs.image && hs.image.includes('/') ? hs.image : ''));
+    if (avatarEl) {
+      if (avatarSrc) {
+        avatarEl.innerHTML = `<img src="${escapeHtml(avatarSrc)}" alt="${escapeHtml(hs.characterName || '인물')}" class="dialogue-avatar-img">`;
+      } else {
+        avatarEl.textContent = hs.icon || '👤';
+      }
+    }
+
+    if (badgeEl) {
+      badgeEl.textContent = isFirstEncounter ? '✨ 새 인물 등록!' : '✔️ 도감 등록 인물';
+      badgeEl.style.display = 'inline-flex';
+    }
+
+    if (widgetEl) {
+      const charCodex = CODEX_DATA.find((c) => c.id === hs.characterId || c.title === hs.characterName);
+      const charDesc = hs.characterDesc || hs.desc || charCodex?.summary || charCodex?.description || '인물 도감에 정보가 등록되었습니다.';
+      widgetEl.innerHTML = `
+        <div class="story-game-widget widget-character ${isFirstEncounter ? 'is-new-anim' : ''}" style="margin: 0 0 12px 0;">
+          <div class="widget-header">
+            <span class="widget-badge" style="background:#1E293B; color:#60A5FA; border:1px solid rgba(96, 165, 250, 0.4);">👤 인물 등록</span>
+            <span class="widget-status">${isFirstEncounter ? '✨ 새 인물 등록!' : '✔️ 도감 등록됨'}</span>
+          </div>
+          <div class="widget-body">
+            <div class="widget-icon" style="background:rgba(30, 41, 59, 0.85); color:#60A5FA; border-radius:50%; width:44px; height:44px; display:grid; place-items:center; font-size:22px; border:2px solid #60A5FA; overflow:hidden;">
+              ${avatarSrc ? `<img src="${escapeHtml(avatarSrc)}" style="width:100%; height:100%; object-fit:contain; border-radius:50%;">` : escapeHtml(hs.icon || '👤')}
+            </div>
+            <div class="widget-details">
+              <strong class="widget-name">${escapeHtml(hs.characterName || '인물')}</strong>
+              <p class="widget-desc">${escapeHtml(hs.characterRole ? `${hs.characterRole} · ` : '')}${escapeHtml(charDesc)}</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
     this.dialogueModal.classList.remove('hidden');
     this.renderDialogueStep();

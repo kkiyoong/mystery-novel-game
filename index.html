@@ -22,17 +22,14 @@
       </div>
 
       <div class="viewer-actions">
-        <button type="button" id="btn-sound-toggle" class="btn-icon-label" title="효과음 켜기/끄기">
-          🔊 효과음
+        <button type="button" id="btn-sound-toggle" class="btn-icon-label" title="효과음 켜기/끄기" aria-label="효과음">
+          🔊
         </button>
-        <button type="button" id="btn-quick-pocket" class="btn-icon-label is-hidden" title="주머니 메뉴 열기" aria-hidden="true" disabled>
-          👜 주머니
+        <button type="button" id="btn-author-mode" class="btn-portal-mode" title="포털 (편집 모드)" aria-haspopup="dialog" aria-expanded="false" aria-label="편집 모드 포털">
+          🌀
         </button>
-        <button type="button" id="btn-author-mode" class="btn-icon-label" aria-haspopup="dialog" aria-expanded="false">
-          ✎ 편집 모드
-        </button>
-        <button type="button" id="btn-reader-settings-toggle" class="btn-icon-label" aria-haspopup="true" aria-expanded="false" title="보기 설정">
-          ⚙️ 보기 설정
+        <button type="button" id="btn-reader-settings-toggle" class="btn-icon-label" aria-haspopup="true" aria-expanded="false" title="보기 설정" aria-label="보기 설정">
+          ⚙️
         </button>
       </div>
     </div>
@@ -171,12 +168,17 @@
         <div class="dialogue-speaker-meta">
           <div class="dialogue-avatar">👩‍🏫</div>
           <div class="dialogue-speaker-info">
-            <strong id="dialogue-char-name" class="dialogue-char-name">사서 엘레나</strong>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <strong id="dialogue-char-name" class="dialogue-char-name">사서 엘레나</strong>
+              <span id="dialogue-char-badge" class="dialogue-char-badge" style="display:none;">✨ 새 인물 등록!</span>
+            </div>
             <span id="dialogue-char-role" class="dialogue-char-role">서고 보존 사서</span>
           </div>
         </div>
         <button type="button" id="dialogue-close-btn" class="btn-close-box" aria-label="대화 종료">✕</button>
       </div>
+
+      <div id="dialogue-new-char-widget" class="dialogue-new-char-widget"></div>
 
       <div class="dialogue-speech-container">
         <p id="dialogue-speech-text" class="dialogue-speech-text">
@@ -210,29 +212,13 @@
   <!-- C. 4 Pocket Panels Drawer / Modal -->
   <div id="pocket-drawer-modal" class="pocket-drawer-modal hidden" role="dialog" aria-modal="true" aria-label="주머니 보관함">
     <div class="drawer-panel-container">
-      <header class="drawer-header">
-        <nav class="drawer-nav" role="tablist" aria-label="주머니 패널">
-          <button type="button" class="drawer-nav-tab is-active" data-panel="codex" role="tab" aria-selected="true">
-            📖 메모
-          </button>
-          <button type="button" class="drawer-nav-tab" data-panel="map" role="tab" aria-selected="false">
-            🗺️ 지도
-          </button>
-          <button type="button" class="drawer-nav-tab" data-panel="inventory" role="tab" aria-selected="false">
-            🎒 인벤토리
-          </button>
-          <button type="button" class="drawer-nav-tab" data-panel="stats" role="tab" aria-selected="false">
-            📊 상태창
-          </button>
-        </nav>
-      </header>
 
       <!-- Panel 1: 메모 (Indexed Codex / Encyclopedia) -->
       <section id="panel-codex" class="drawer-panel-view" role="tabpanel">
         <div class="codex-toolbar">
           <div class="codex-categories">
             <button type="button" class="codex-filter-btn is-active" data-category="all" aria-pressed="true">전체</button>
-            <button type="button" class="codex-filter-btn" data-category="clue" aria-pressed="false">단서</button>
+            <button type="button" class="codex-filter-btn" data-category="clue" aria-pressed="false">주제</button>
             <button type="button" class="codex-filter-btn" data-category="character" aria-pressed="false">인물</button>
             <button type="button" class="codex-filter-btn" data-category="magic" aria-pressed="false">마법</button>
           </div>
@@ -246,7 +232,9 @@
 
         <div class="codex-split-layout">
           <div id="codex-entry-list" class="codex-entry-list">
-            <p class="hex-board-hint">기록을 선택해 내용을 확인하세요. 조합 가능한 기록은 서로 가까이 끌어 놓으면 가설로 연결됩니다. 빈 곳을 드래그해 이동하고 휠이나 두 손가락으로 확대할 수 있습니다.</p>
+            <div id="memo-deduction-guide-bar" class="memo-deduction-guide-bar is-normal-mode">
+              <span class="guide-text-normal">타일 클릭: 세부 타일 펼치기 / 타일 더블 클릭: 추론 모드 들어가기</span>
+            </div>
             <div class="hex-board-frame">
               <svg id="memo-hex-svg" class="hex-board-svg" viewBox="-260 -150 520 300" role="group" aria-label="메모 육각 보드">
                 <g id="memo-hex-layer"></g>
@@ -285,26 +273,14 @@
       <!-- Panel 3: 소지품 (Inventory) -->
       <section id="panel-inventory" class="drawer-panel-view hidden" role="tabpanel">
         <div class="inventory-layout">
-          <div class="inventory-grid-wrapper">
-            <h4 class="inventory-heading">인벤토리</h4>
-            <div class="hex-board-filters" role="group" aria-label="아이템 분류">
-              <button type="button" class="inventory-filter-btn is-active" data-category="전체">전체</button>
-              <button type="button" class="inventory-filter-btn" data-category="key">장비</button>
-              <button type="button" class="inventory-filter-btn" data-category="clue_item">단서</button>
-              <button type="button" class="inventory-filter-btn" data-category="item">기타</button>
-            </div>
-            <p class="hex-board-hint">드래그로 보드를 옮기고 휠이나 두 손가락으로 확대할 수 있습니다.</p>
-            <div class="hex-board-frame">
-              <div class="hex-board-controls" role="group" aria-label="소지품 보드 보기 조절">
-                <button type="button" data-hex-board="inventory" data-hex-action="zoom-in" aria-label="소지품 보드 확대">+</button>
-                <button type="button" data-hex-board="inventory" data-hex-action="zoom-out" aria-label="소지품 보드 축소">−</button>
-                <button type="button" data-hex-board="inventory" data-hex-action="reset" aria-label="소지품 보드 초기화">초기화</button>
-              </div>
-              <svg id="inventory-hex-svg" class="hex-board-svg" viewBox="-260 -150 520 300" role="group" aria-label="소지품 육각 보드">
-                <g id="inventory-hex-layer"></g>
-              </svg>
-            </div>
-            <p id="inventory-hex-empty" class="hex-board-empty hidden">이 분류에 보관 중인 소지품이 없습니다.</p>
+          <div class="inventory-header-row">
+            <h4 class="inventory-heading">소지품</h4>
+            <span id="inventory-capacity-label" class="inventory-capacity-label">1 / 7</span>
+          </div>
+          <div class="honeycomb-inventory-wrapper">
+            <svg id="honeycomb-inventory-svg" class="honeycomb-inventory-svg" viewBox="-115 -115 230 230" role="group" aria-label="소지품 보관함">
+              <g id="honeycomb-slots-layer"></g>
+            </svg>
           </div>
           <div id="inventory-detail-box" class="inventory-detail-box">
             <!-- Inspected item detail -->
@@ -340,17 +316,24 @@
         <button type="button" id="btn-author-editor-close" class="author-editor-close" aria-label="편집 모드 닫기">✕</button>
       </header>
       <div class="author-editor-toolbar">
-        <p>수정 내용은 이 브라우저에 자동 저장됩니다. JSON 내보내기는 백업용이며, 원본 파일에 반영하려면 내려받은 파일을 직접 적용해야 합니다.</p>
+        <div class="author-sync-info">
+          <span id="author-sync-status-badge" class="author-sync-badge sync-local">🟡 로컬 임시 저장</span>
+          <span id="author-sync-desc" class="author-sync-desc">수정 후 [💾 코드 파일에 저장]을 누르면 실제 파일(storyData.js 등)에 저장됩니다.</span>
+        </div>
         <div class="author-button-row">
-          <button type="button" class="author-action" data-author-action="export">데이터 내보내기 (JSON)</button>
-          <button type="button" class="author-action" data-author-action="import">불러오기</button>
+          <button type="button" class="author-action is-primary" data-author-action="save-disk">💾 코드 파일에 저장</button>
+          <button type="button" class="author-action" data-author-action="connect-folder">📂 폴더 연결</button>
+          <button type="button" class="author-action is-subtle" data-author-action="export">JSON 백업</button>
+          <button type="button" class="author-action is-subtle" data-author-action="import">불러오기</button>
+          <button type="button" class="author-action is-subtle" data-author-action="reset-cache" title="브라우저 임시 저장을 지우고 최신 코드 파일로 새로고침">🔄 원본 초기화</button>
           <input type="file" id="author-import-file" accept="application/json,.json" hidden>
         </div>
       </div>
       <nav class="author-editor-tabs" role="tablist" aria-label="편집할 데이터 종류">
         <button type="button" class="author-editor-tab is-active" data-author-tab="story" role="tab" aria-selected="true">본문 · 선택지</button>
-        <button type="button" class="author-editor-tab" data-author-tab="map" role="tab" aria-selected="false">지도 타일</button>
-        <button type="button" class="author-editor-tab" data-author-tab="memo" role="tab" aria-selected="false">메모 타일</button>
+        <button type="button" class="author-editor-tab" data-author-tab="character" role="tab" aria-selected="false">인물</button>
+        <button type="button" class="author-editor-tab" data-author-tab="map" role="tab" aria-selected="false">지도</button>
+        <button type="button" class="author-editor-tab" data-author-tab="memo" role="tab" aria-selected="false">메모</button>
         <button type="button" class="author-editor-tab" data-author-tab="inventory" role="tab" aria-selected="false">소지품</button>
       </nav>
       <p id="author-editor-status" class="author-editor-status" role="status" aria-live="polite"></p>
@@ -358,10 +341,30 @@
     </section>
   </div>
 
+  <!-- Author Mode Password Portal Modal -->
+  <div id="portal-password-modal" class="portal-pw-modal hidden" role="dialog" aria-modal="true" aria-labelledby="portal-modal-title">
+    <div class="portal-pw-backdrop"></div>
+    <div class="portal-pw-dialog">
+      <div class="portal-pw-icon">🌀</div>
+      <h3 id="portal-modal-title" class="portal-pw-title">주머니쥐만 포털에 들어갈 수 있어요!</h3>
+      <p class="portal-pw-desc">작가 편집 모드로 통하는 차원문입니다.<br>비밀번호를 입력하여 신원을 확인하세요.</p>
+      <form id="portal-pw-form" class="portal-pw-form">
+        <div class="portal-pw-input-wrapper">
+          <input type="password" id="portal-pw-input" class="portal-pw-input" placeholder="비밀번호 입력" maxlength="20" autocomplete="off" required>
+        </div>
+        <p id="portal-pw-error" class="portal-pw-error hidden">비밀번호가 올바르지 않습니다. (주머니쥐가 아닙니다! 🐾)</p>
+        <div class="portal-pw-actions">
+          <button type="button" id="btn-portal-pw-cancel" class="portal-pw-btn portal-pw-btn-cancel">취소</button>
+          <button type="submit" id="btn-portal-pw-submit" class="portal-pw-btn portal-pw-btn-submit">입장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- 5. Toast Notifications Container -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <!-- Main ES6 Entry Point -->
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js?v=9"></script>
 </body>
 </html>

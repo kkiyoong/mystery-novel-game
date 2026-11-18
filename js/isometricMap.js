@@ -7,115 +7,115 @@ const MAP_OFFSET_Y = 35;
 
 export const MAP_TILES = [
   {
-    key: 'dormitory',
-    name: '기숙사',
-    q: -1,
-    r: 0,
-    building: 'dormitory',
-    description: '아카데미 구성원들이 생활하는 기숙사입니다.',
-    visualOnly: true
+    "key": "dormitory",
+    "name": "기숙사",
+    "q": -1,
+    "r": 0,
+    "building": "dormitory",
+    "description": "아카데미 구성원들이 생활하는 기숙사입니다.",
+    "visualOnly": true
   },
   {
-    key: 'archive-tower',
-    name: '기록탑',
-    q: 0,
-    r: -1,
-    building: 'tower',
-    description: '아카데미의 오래된 기록을 보관하는 탑입니다.',
-    visualOnly: true
+    "key": "archive-tower",
+    "name": "기록탑",
+    "q": 0,
+    "r": -1,
+    "building": "tower",
+    "description": "아카데미의 오래된 기록을 보관하는 탑입니다.",
+    "visualOnly": true
   },
   {
-    key: 'academic-wing',
-    name: '연구관',
-    q: 1,
-    r: -1,
-    building: 'annex',
-    description: '아카데미의 연구와 강의가 이루어지는 건물입니다.',
-    visualOnly: true
+    "key": "academic-wing",
+    "name": "연구관",
+    "q": 1,
+    "r": -1,
+    "building": "annex",
+    "description": "아카데미의 연구와 강의가 이루어지는 건물입니다.",
+    "visualOnly": true
   },
   {
-    key: 'garden',
-    locationId: 'loc_garden',
-    name: '정원',
-    q: -1,
-    r: -1,
-    building: 'garden',
-    alwaysVisible: true
+    "key": "garden",
+    "locationId": "loc_garden",
+    "name": "정원",
+    "q": -1,
+    "r": -1,
+    "building": "garden",
+    "alwaysVisible": true
   },
   {
-    key: 'main-building',
-    locationId: 'loc_library',
-    name: '본관',
-    q: 0,
-    r: 0,
-    building: 'main'
+    "key": "main-building",
+    "locationId": "loc_library",
+    "name": "본관",
+    "q": 0,
+    "r": 0,
+    "building": "main"
   },
   {
-    key: 'annex',
-    locationId: 'loc_lab',
-    name: '별관',
-    q: 1,
-    r: 0,
-    building: 'annex'
+    "key": "annex",
+    "locationId": "loc_lab",
+    "name": "별관",
+    "q": 1,
+    "r": 0,
+    "building": "annex"
   },
   {
-    key: 'clocktower',
-    locationId: 'loc_clocktower',
-    name: '시계탑 테라스',
-    q: 2,
-    r: -1,
-    building: 'tower'
+    "key": "clocktower",
+    "locationId": "loc_clocktower",
+    "name": "시계탑 테라스",
+    "q": 2,
+    "r": -1,
+    "building": "tower"
   },
   {
-    key: 'nebula-hall',
-    locationId: 'loc_nebula',
-    name: '네블라 홀',
-    q: 2,
-    r: 0,
-    building: 'dome',
-    description: '아카데미 외곽에 자리한 돔형 강당입니다.'
+    "key": "nebula-hall",
+    "locationId": "loc_nebula",
+    "name": "네블라 홀",
+    "q": 2,
+    "r": 0,
+    "building": "dome",
+    "description": "아카데미 외곽에 자리한 돔형 강당입니다."
   },
   {
-    key: 'north-expansion',
-    name: '북쪽 빈 터',
-    q: 1,
-    r: -2,
-    description: '아카데미 북쪽에 남아 있는 빈 터입니다.'
+    "key": "north-expansion",
+    "name": "북쪽 빈 터",
+    "q": 1,
+    "r": -2,
+    "description": "아카데미 북쪽에 남아 있는 빈 터입니다."
   },
   {
-    key: 'west-expansion',
-    name: '서쪽 빈 터',
-    q: -2,
-    r: 0,
-    description: '아카데미 서쪽의 빈 부지입니다.'
+    "key": "west-expansion",
+    "name": "서쪽 빈 터",
+    "q": -2,
+    "r": 0,
+    "description": "아카데미 서쪽의 빈 부지입니다."
   },
   {
-    key: 'southwest-expansion',
-    name: '남서쪽 빈 터',
-    q: -2,
-    r: 1,
-    description: '아카데미 남서쪽의 빈 부지입니다.'
+    "key": "southwest-expansion",
+    "name": "남서쪽 빈 터",
+    "q": -2,
+    "r": 1,
+    "description": "아카데미 남서쪽의 빈 부지입니다."
   },
   {
-    key: 'southwest-courtyard',
-    name: '남쪽 안뜰',
-    q: -1,
-    r: 1,
-    description: '아직 건물이 들어서지 않은 남쪽 안뜰입니다.'
+    "key": "southwest-courtyard",
+    "name": "남쪽 안뜰",
+    "q": -1,
+    "r": 1,
+    "description": "아직 건물이 들어서지 않은 남쪽 안뜰입니다."
   },
   {
-    key: 'south-courtyard',
-    name: '중앙 남쪽 터',
-    q: 0,
-    r: 1,
-    description: '중앙 건물 남쪽에 남아 있는 빈 터입니다.'
+    "key": "south-courtyard",
+    "name": "중앙 남쪽 터",
+    "q": 0,
+    "r": 1,
+    "description": "중앙 건물 남쪽에 남아 있는 빈 터입니다."
   },
   {
-    key: 'southeast-courtyard',
-    name: '남동쪽 빈 터',
-    q: 1,
-    r: 1,
-    description: '아카데미 남동쪽의 빈 부지입니다.'
+    "key": "southeast-courtyard",
+    "name": "남동쪽 빈 터",
+    "q": 1,
+    "r": 1,
+    "description": "아카데미 남동쪽의 빈 부지입니다."
   }
 ];
 

@@ -10,7 +10,7 @@ import { MemoBoard } from './memoBoard.js';
 import { IsometricMap } from './isometricMap.js';
 import { CODEX_CATEGORIES, CODEX_DATA, CLUE_RECIPES } from './data/codexData.js';
 import { MAP_LOCATIONS } from './data/mapData.js';
-import { AuthorEditor, applySavedAuthorData } from './authorEditor.js';
+import { AuthorEditor, applySavedAuthorData } from './authorEditor.js?v=6';
 
 const AUTHOR_DATA_LOAD_RESULT = applySavedAuthorData();
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -253,7 +253,8 @@ class App {
     if (muteBtn) {
       muteBtn.addEventListener('click', () => {
         this.engine.soundEnabled = !this.engine.soundEnabled;
-        muteBtn.textContent = this.engine.soundEnabled ? '🔊 효과음' : '🔇 음소거';
+        muteBtn.textContent = this.engine.soundEnabled ? '🔊' : '🔇';
+        muteBtn.title = this.engine.soundEnabled ? '효과음 켜기/끄기' : '효과음 꺼짐 (음소거)';
         muteBtn.classList.toggle('is-muted', !this.engine.soundEnabled);
       });
     }
@@ -386,7 +387,11 @@ class App {
         layerEl: memoLayer,
         recipes: CLUE_RECIPES,
         onSelectClue: (node) => {
-          if (node.entry) {
+          if (node.isSubItem) {
+            this.selectCodexSubItem(node);
+          } else if (node.isMidClue) {
+            this.selectCodexMidClue(node);
+          } else if (node.entry) {
             this.selectedCodexId = node.entry.id;
             this.selectCodexEntry(node.entry);
           } else if (node.isCategoryIndex) {
@@ -394,9 +399,40 @@ class App {
           } else if (node.isHypothesis) {
             this.selectMemoHypothesis(node);
           }
+
+          if (this.memoBoard) {
+            this.memoBoard.readNewIds.add(node.id);
+            if (node.entry?.id) this.memoBoard.readNewIds.add(node.entry.id);
+            if (node.parentEntry?.id) this.memoBoard.readNewIds.add(node.parentEntry.id);
+            if (node.isCategoryIndex && node.subItems) {
+              node.subItems.forEach((si) => {
+                this.memoBoard.readNewIds.add(si.id);
+                if (si.entry?.id) this.memoBoard.readNewIds.add(si.entry.id);
+              });
+            }
+          }
+
+          if (node.entry?.id) state.markCodexRead(node.entry.id);
+          if (node.id) {
+            state.markCodexRead(node.id);
+            state.markTileRecordRead(node.id);
+            if (node.label) state.markAllTileRecordsReadForTile(node.label);
+          }
+          if (node.parentEntry?.id) state.markCodexRead(node.parentEntry.id);
+          if (node.isCategoryIndex && node.subItems) {
+            node.subItems.forEach((si) => {
+              if (si.entry?.id) state.markCodexRead(si.entry.id);
+            });
+          }
         },
         onUnlockHypothesis: (node) => {
+          this.engine.playAudio('codexUnlock');
           this.engine.showToast(`${node.label}을 세웠습니다.`, 'success', '💡');
+        },
+        onPuzzleSolved: (subNode, matchedClues) => {
+          this.engine.playAudio('codexUnlock');
+          const names = matchedClues.map(c => `[${c.label}]`).join(' + ');
+          this.engine.showToast(`🎉 [추론 완성] ${names} 조건을 만족하는 '${subNode.label}'을 찾아냈습니다!`, 'success', '✨');
         }
       });
       this.hexBoards.memo = this.memoBoard;
@@ -534,16 +570,25 @@ class App {
           sub: categoryLabel(relatedEntry.category),
           desc: relatedEntry.summary,
           entry: relatedEntry,
-          isNew: Boolean(state.getUnlockedCodex()[relatedEntry.id]?.isNew)
+          isNew: Boolean(state.getUnlockedCodex()[relatedEntry.id]?.isNew && !board.readNewIds.has(relatedEntry.id))
         }));
+      const unlockedSubClues = (entry.subClues || []).filter((sc) => {
+        return sc.unlockedByDefault !== false || state.isClueConditionUnlocked(sc.id);
+      }).map((sc) => ({
+        ...sc,
+        isNew: Boolean(state.getUnlockedCodex()[sc.id]?.isNew && !board.readNewIds.has(sc.id))
+      }));
+
       return {
         ...entry,
         entry,
+        role: entry.role || 'keyword',
         label: unlocked ? (entry.keywords?.[0] || entry.title) : '미발견',
         sub: categoryLabel('clue'),
-        subItems: [...(entry.subItems || []), ...subItems],
+        subClues: unlockedSubClues,
+        subItems: entry.subItems?.length ? entry.subItems : subItems,
         locked: !unlocked,
-        isNew: Boolean(codexState && codexState.isNew),
+        isNew: Boolean(codexState && codexState.isNew && !board.readNewIds.has(entry.id)),
         accessibleLabel: unlocked ? entry.title : '미발견 기록'
       };
     });
@@ -554,6 +599,7 @@ class App {
       const label = categoryLabel(categoryId);
       const entries = filtered.filter((entry) => entry.category === categoryId && isUnlocked(entry));
       const categoryIdLabel = categoryId.replace(/[^a-z0-9_-]/gi, '_');
+      const hasAnyNew = entries.some((entry) => Boolean(state.getUnlockedCodex()[entry.id]?.isNew && !board.readNewIds.has(entry.id)));
       return {
         id: `memo_index_${categoryIdLabel}`,
         category: categoryId,
@@ -562,7 +608,7 @@ class App {
         desc: `발견한 ${label} 기록 ${entries.length}개`,
         isCategoryIndex: true,
         locked: false,
-        isNew: entries.some((entry) => Boolean(state.getUnlockedCodex()[entry.id]?.isNew)),
+        isNew: Boolean(hasAnyNew && !board.readNewIds.has(`memo_index_${categoryIdLabel}`)),
         accessibleLabel: `${label} 기록 목록`,
         subItems: entries.map((entry) => ({
           id: `${categoryIdLabel}_entry_${entry.id}`,
@@ -570,7 +616,7 @@ class App {
           sub: label,
           desc: entry.summary,
           entry,
-          isNew: Boolean(state.getUnlockedCodex()[entry.id]?.isNew)
+          isNew: Boolean(state.getUnlockedCodex()[entry.id]?.isNew && !board.readNewIds.has(entry.id))
         }))
       };
     });
@@ -620,6 +666,21 @@ class App {
     this.selectedCodexId = null;
     this.selectedMemoIndexCategory = node.category;
     this.selectedMemoDetailId = null;
+    if (this.memoBoard) {
+      this.memoBoard.readNewIds.add(node.id);
+      if (node.subItems) {
+        node.subItems.forEach((si) => {
+          this.memoBoard.readNewIds.add(si.id);
+          if (si.entry?.id) this.memoBoard.readNewIds.add(si.entry.id);
+        });
+      }
+      this.memoBoard.render();
+    }
+    if (node.subItems) {
+      node.subItems.forEach((si) => {
+        if (si.entry?.id) state.markCodexRead(si.entry.id);
+      });
+    }
     const detailContainer = document.getElementById('codex-entry-detail');
     if (!detailContainer) return;
 
@@ -693,6 +754,146 @@ class App {
     detailContainer.replaceChildren(content);
   }
 
+  selectCodexSubItem(node) {
+    this.selectedCodexId = node.id;
+    if (node.id) {
+      state.markCodexRead(node.id);
+      state.markTileRecordRead(node.id);
+      if (node.label) state.markAllTileRecordsReadForTile(node.label);
+    }
+    if (node.entry?.id) state.markCodexRead(node.entry.id);
+    if (node.parentEntry?.id) state.markCodexRead(node.parentEntry.id);
+    if (this.memoBoard) {
+      this.memoBoard.readNewIds.add(node.id);
+      if (node.entry?.id) this.memoBoard.readNewIds.add(node.entry.id);
+      if (node.parentEntry?.id) this.memoBoard.readNewIds.add(node.parentEntry.id);
+      this.memoBoard.render();
+    }
+    const detailContainer = document.getElementById('codex-entry-detail');
+    if (!detailContainer) return;
+
+    const parent = node.parentEntry;
+    const parentTitle = parent?.title || parent?.name || '상위 단서';
+    const subTitle = node.label || '세부 단서';
+    const subDesc = node.desc || node.description || `${parentTitle}에 연결된 세부 단서입니다.`;
+
+    // 정의된 추가 기록 및 상태에서 해금된 추가 기록 수집
+    let definedRecords = Array.isArray(node.records) ? [...node.records] : [];
+    if (!definedRecords.length) {
+      for (const entry of CODEX_DATA) {
+        const foundSub = (entry.subItems || []).find((si) => si.id === node.id || si.label === node.label);
+        if (foundSub?.records?.length) {
+          definedRecords = [...foundSub.records];
+          break;
+        }
+      }
+    }
+
+    const unlockedRecords = [];
+    definedRecords.forEach((rec) => {
+      if (state.isTileRecordUnlocked(rec.id) && rec.text) {
+        unlockedRecords.push(rec.text);
+      }
+    });
+
+    const allStateRecords = state.getUnlockedTileRecords();
+    Object.values(allStateRecords).forEach((rec) => {
+      if (!rec || !rec.text) return;
+      if (rec.tileId === node.id || rec.tileId === node.label || rec.tileId === subTitle) {
+        if (!unlockedRecords.includes(rec.text)) {
+          unlockedRecords.push(rec.text);
+        }
+      }
+    });
+
+    const recordsHtml = unlockedRecords.length > 0 ? `
+      <div class="tile-records-box" style="margin-top:16px; padding:12px 14px; background:rgba(30, 41, 59, 0.75); border:1px solid rgba(96, 165, 250, 0.4); border-radius:8px;">
+        <div style="font-size:12.5px; font-weight:700; color:#60A5FA; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+          <span>📝</span> 추가 조사 기록 (${unlockedRecords.length})
+        </div>
+        <ul style="margin:0; padding-left:18px; font-size:13px; line-height:1.75; color:var(--text-normal, #e2e8f0);">
+          ${unlockedRecords.map((t) => `<li>${escapeHtml(t)}</li>`).join('')}
+        </ul>
+      </div>
+    ` : '';
+
+    detailContainer.innerHTML = `
+      <div class="codex-detail-content">
+        <header class="detail-header">
+          <span class="detail-category-badge">세부 키워드 · ${escapeHtml(parentTitle)}</span>
+          <div class="detail-title-row">
+            <span class="detail-icon">🔍</span>
+            <h3 class="detail-title">${escapeHtml(subTitle)}</h3>
+          </div>
+        </header>
+        <div class="detail-body">
+          <blockquote class="detail-summary">"${escapeHtml(subTitle)}" (상위 항목: ${escapeHtml(parentTitle)})</blockquote>
+          <div class="detail-description">
+            <p>${escapeHtml(subDesc)}</p>
+            ${recordsHtml}
+          </div>
+        </div>
+        <footer class="detail-footer">
+          <span class="detail-status-pill">✓ 세부 단서 확인 완료</span>
+        </footer>
+      </div>
+    `;
+  }
+
+  selectCodexMidClue(node) {
+    this.selectedCodexId = node.id;
+    if (node.id) state.markCodexRead(node.id);
+    if (node.entry?.id) state.markCodexRead(node.entry.id);
+    if (node.parentEntry?.id) state.markCodexRead(node.parentEntry.id);
+    if (this.memoBoard) {
+      this.memoBoard.readNewIds.add(node.id);
+      if (node.entry?.id) this.memoBoard.readNewIds.add(node.entry.id);
+      if (node.parentEntry?.id) this.memoBoard.readNewIds.add(node.parentEntry.id);
+      this.memoBoard.render();
+    }
+    const detailContainer = document.getElementById('codex-entry-detail');
+    if (!detailContainer) return;
+
+    const parent = node.parentEntry;
+    const parentTitle = parent?.title || parent?.name || '상위 주제';
+    const clueTitle = node.label || '단서';
+    const clueDesc = node.desc || node.conditionDesc || '조건에 맞는 세부 타일을 드래그하여 인접하게 배치해보세요.';
+    const validTargets = Array.isArray(node.validTargets) && node.validTargets.length
+      ? node.validTargets.join(', ')
+      : '모든 타일';
+    const invalidTargets = Array.isArray(node.invalidTargets) && node.invalidTargets.length
+      ? node.invalidTargets.join(', ')
+      : '없음';
+
+    detailContainer.innerHTML = `
+      <div class="codex-detail-content">
+        <header class="detail-header">
+          <span class="detail-category-badge">단서 · ${escapeHtml(parentTitle)}</span>
+          <div class="detail-title-row">
+            <span class="detail-icon">🔘</span>
+            <h3 class="detail-title">${escapeHtml(clueTitle)}</h3>
+          </div>
+        </header>
+        <div class="detail-body">
+          <blockquote class="detail-summary">"${escapeHtml(clueTitle)}" (상위 주제: ${escapeHtml(parentTitle)})</blockquote>
+          <div class="detail-description">
+            <p>${escapeHtml(clueDesc)}</p>
+            <div style="margin-top:14px; padding:12px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.08); border-radius:8px; font-size:12.5px; line-height:1.6;">
+              <div style="margin-bottom:6px;"><strong style="color:#5dade2;">✔️ 부합 세부 타일 (파랑):</strong> ${escapeHtml(validTargets)}</div>
+              <div><strong style="color:#e74c3c;">❌ 모순 세부 타일 (빨강):</strong> ${escapeHtml(invalidTargets)}</div>
+            </div>
+            <p style="margin-top:12px; font-size:12px; color:var(--text-muted, #aaa);">
+              💡 <strong>조합 힌트:</strong> 보드 위에서 세부 타일을 드래그해 이 단서 옆에 붙이면 조건 부합 여부가 색상(파랑/빨강)으로 판정됩니다.
+            </p>
+          </div>
+        </div>
+        <footer class="detail-footer">
+          <span class="detail-status-pill">🔘 단서 확인 완료</span>
+        </footer>
+      </div>
+    `;
+  }
+
   selectCodexEntry(entry) {
     this.selectedCodexId = entry.id;
     this.selectedMemoDetailId = entry.id;
@@ -701,6 +902,10 @@ class App {
 
     if (state.isCodexUnlocked(entry.id)) {
       state.markCodexRead(entry.id);
+    }
+    if (this.memoBoard) {
+      this.memoBoard.readNewIds.add(entry.id);
+      this.memoBoard.render();
     }
 
     const detailContainer = document.getElementById('codex-entry-detail');
@@ -719,15 +924,24 @@ class App {
 
     const categoryLabel = CODEX_CATEGORIES.find((category) => category.id === entry.category)?.label || entry.category;
 
+    const iconHtml = (entry.icon && entry.icon.includes('/'))
+      ? `<img src="${escapeHtml(entry.icon)}" class="detail-icon-img" alt="">`
+      : escapeHtml(entry.icon || '📖');
+
+    const portraitHtml = (entry.image && entry.image.includes('/'))
+      ? `<div class="detail-portrait-box"><img src="${escapeHtml(entry.image)}" class="detail-portrait-img" alt="${escapeHtml(entry.title)}"></div>`
+      : '';
+
     detailContainer.innerHTML = `
       <div class="codex-detail-content">
         <header class="detail-header">
           <span class="detail-category-badge">${categoryLabel}</span>
           <div class="detail-title-row">
-            <span class="detail-icon">${escapeHtml(entry.icon)}</span>
+            <span class="detail-icon">${iconHtml}</span>
             <h3 class="detail-title">${escapeHtml(entry.title)}</h3>
           </div>
         </header>
+        ${portraitHtml}
         <div class="detail-body">
           <blockquote class="detail-summary">"${escapeHtml(entry.summary)}"</blockquote>
           <div class="detail-description">
@@ -773,68 +987,156 @@ class App {
   }
 
   renderInventory() {
-    const board = this.hexBoards.inventory;
-    const emptyMessage = document.getElementById('inventory-hex-empty');
+    const layer = document.getElementById('honeycomb-slots-layer');
+    const capLabel = document.getElementById('inventory-capacity-label');
     const detailBox = document.getElementById('inventory-detail-box');
-    if (!board) return;
+    if (!layer) return;
 
     const items = state.getInventory();
-    const categoryLabels = {
-      key: '장비',
-      artifact: '유물',
-      clue: '단서',
-      clue_item: '단서',
-      tool: '도구',
-      material: '재료',
-      item: '기타'
-    };
-    const categorizedItems = items.map((item) => {
-      const category = item.category || item.type || 'item';
-      const filterCategory = category === 'artifact' ? 'key'
-        : category === 'clue' ? 'clue_item'
-          : ['tool', 'material'].includes(category) ? 'item'
-            : category;
-      const typeLabel = categoryLabels[category] || '기타';
-      const quantity = item.quantity ?? 1;
-      return {
-        ...item,
-        category: filterCategory,
-        label: item.name,
-        typeLabel,
-        quantityLabel: `${quantity}개`,
-        accessibleLabel: `${item.name}, 종류 ${typeLabel}, 보관 수량 ${quantity}개`
-      };
-    });
-    const nodes = board.prepareInventoryNodes(categorizedItems, this.activeInventoryCategory);
-    if (emptyMessage) emptyMessage.classList.toggle('hidden', nodes.length > 0);
-    board.render(nodes, this.selectedInventoryItemId);
+    const totalSlots = 7; // 중앙 1 + 주변 6
 
-    const selectedItem = nodes.find(item => item.id === this.selectedInventoryItemId) || nodes[0];
+    if (capLabel) {
+      capLabel.textContent = `${items.length} / ${totalSlots}`;
+    }
+
+    layer.innerHTML = '';
+
+    // Center (0,0) + 6 interlocking neighbors
+    const HONEYCOMB_LAYOUT = [
+      { id: 0, x: 0, y: 0, isCenter: true },
+      { id: 1, x: -35.5, y: -61.5 },
+      { id: 2, x: 35.5, y: -61.5 },
+      { id: 3, x: 71, y: 0 },
+      { id: 4, x: 35.5, y: 61.5 },
+      { id: 5, x: -35.5, y: 61.5 },
+      { id: 6, x: -71, y: 0 }
+    ];
+
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+
+    HONEYCOMB_LAYOUT.forEach((pos, index) => {
+      const item = items[index];
+      const g = document.createElementNS(SVG_NS, 'g');
+      const classes = ['honeycomb-slot'];
+      if (pos.isCenter) classes.push('is-center');
+
+      const points = `${pos.x},${pos.y - 41} ${pos.x + 35.5},${pos.y - 20.5} ${pos.x + 35.5},${pos.y + 20.5} ${pos.x},${pos.y + 41} ${pos.x - 35.5},${pos.y + 20.5} ${pos.x - 35.5},${pos.y - 20.5}`;
+
+      const poly = document.createElementNS(SVG_NS, 'polygon');
+      poly.setAttribute('points', points);
+      poly.setAttribute('class', 'honeycomb-poly');
+      g.appendChild(poly);
+
+      if (item) {
+        classes.push('is-filled');
+        const isSelected = item.id === this.selectedInventoryItemId || (!this.selectedInventoryItemId && index === 0);
+        if (isSelected) {
+          classes.push('is-selected');
+          this.selectedInventoryItemId = item.id;
+        }
+
+        const iconText = document.createElementNS(SVG_NS, 'text');
+        iconText.setAttribute('x', pos.x);
+        iconText.setAttribute('y', pos.y - 4);
+        iconText.setAttribute('class', 'honeycomb-icon');
+        iconText.textContent = item.icon || '📦';
+        g.appendChild(iconText);
+
+        const nameText = document.createElementNS(SVG_NS, 'text');
+        nameText.setAttribute('x', pos.x);
+        nameText.setAttribute('y', pos.y + 16);
+        nameText.setAttribute('class', 'honeycomb-name');
+        nameText.textContent = item.name.length > 5 ? `${item.name.slice(0, 4)}…` : item.name;
+        g.appendChild(nameText);
+
+        if (item.quantity && item.quantity > 1) {
+          const qtyCircle = document.createElementNS(SVG_NS, 'circle');
+          qtyCircle.setAttribute('cx', pos.x + 18);
+          qtyCircle.setAttribute('cy', pos.y - 18);
+          qtyCircle.setAttribute('r', 7.5);
+          qtyCircle.setAttribute('class', 'honeycomb-qty-bg');
+          g.appendChild(qtyCircle);
+
+          const qtyText = document.createElementNS(SVG_NS, 'text');
+          qtyText.setAttribute('x', pos.x + 18);
+          qtyText.setAttribute('y', pos.y - 17.5);
+          qtyText.setAttribute('class', 'honeycomb-qty-text');
+          qtyText.textContent = String(item.quantity);
+          g.appendChild(qtyText);
+        }
+
+        g.setAttribute('aria-label', item.name);
+        g.addEventListener('click', () => {
+          this.selectInventoryItem(item);
+          layer.querySelectorAll('.honeycomb-slot').forEach(s => s.classList.remove('is-selected'));
+          g.classList.add('is-selected');
+        });
+      } else {
+        classes.push('is-empty');
+
+        const plus = document.createElementNS(SVG_NS, 'text');
+        plus.setAttribute('x', pos.x);
+        plus.setAttribute('y', pos.y + 1);
+        plus.setAttribute('class', 'honeycomb-empty-icon');
+        plus.textContent = '+';
+        g.appendChild(plus);
+
+        g.setAttribute('aria-label', `빈 슬롯 ${index + 1}`);
+        g.addEventListener('click', () => {
+          layer.querySelectorAll('.honeycomb-slot').forEach(s => s.classList.remove('is-selected'));
+          g.classList.add('is-selected');
+          if (detailBox) {
+            detailBox.innerHTML = `
+              <div class="inv-inspect-card">
+                <div class="inspect-icon-large" style="opacity: 0.35;">⬡</div>
+                <div class="inspect-text-group">
+                  <h4 class="inspect-name" style="color: var(--text-muted); font-size: 15px;">빈 슬롯</h4>
+                  <p class="inspect-desc">아이템이 없습니다.</p>
+                </div>
+              </div>
+            `;
+          }
+        });
+      }
+
+      g.setAttribute('class', classes.join(' '));
+      layer.appendChild(g);
+    });
+
+    const selectedItem = items.find(item => item.id === this.selectedInventoryItemId) || items[0];
     if (selectedItem) {
       this.selectInventoryItem(selectedItem);
-    } else if (detailBox) {
-      this.selectedInventoryItemId = null;
-      detailBox.innerHTML = `<div class="inv-empty-msg">이 분류에 보관 중인 소지품이 없습니다.</div>`;
+    } else if (detailBox && items.length === 0) {
+      detailBox.innerHTML = `
+        <div class="inv-inspect-card">
+          <div class="inspect-icon-large" style="opacity: 0.35;">🎒</div>
+          <div class="inspect-text-group">
+            <h4 class="inspect-name" style="color: var(--text-muted); font-size: 15px;">소지품 없음</h4>
+            <p class="inspect-desc">아이템을 획득하면 보관함에 채워집니다.</p>
+          </div>
+        </div>
+      `;
     }
   }
 
   selectInventoryItem(item) {
     this.selectedInventoryItemId = item.id;
-    document.querySelectorAll('#inventory-hex-layer .hex-node').forEach((node) => {
-      node.classList.toggle('is-selected', node.dataset.id === item.id);
+    document.querySelectorAll('.honeycomb-slot').forEach((slot) => {
+      const name = slot.querySelector('.honeycomb-name')?.textContent;
+      slot.classList.toggle('is-selected', name === item.name);
     });
     const detailBox = document.getElementById('inventory-detail-box');
     if (!detailBox) return;
 
     detailBox.innerHTML = `
       <div class="inv-inspect-card">
-      <div class="inspect-icon-large">${escapeHtml(item.icon)}</div>
+        <div class="inspect-icon-large">${escapeHtml(item.icon || '📦')}</div>
         <div class="inspect-text-group">
           <div class="inspect-header-line">
-          <h4 class="inspect-name">${escapeHtml(item.name)}</h4>
-          <span class="inspect-type-tag">보관 수량: ${escapeHtml(item.quantity)}개</span>
+            <h4 class="inspect-name">${escapeHtml(item.name)}</h4>
+            <span class="inspect-type-tag">수량: ${escapeHtml(item.quantity ?? 1)}개</span>
           </div>
-        <p class="inspect-desc">${escapeHtml(item.desc)}</p>
+          <p class="inspect-desc">${escapeHtml(item.desc || '설명이 없습니다.')}</p>
         </div>
       </div>
     `;
