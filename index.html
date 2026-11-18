@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>아카데미생의 주머니는 이세계 오파츠 상점</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Web Fonts for Korean story text and interface controls -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Noto+Serif+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="theme-sepia">
+
+  <!-- 1. Top Viewer Bar (Web Novel Controls) -->
+  <header id="top-viewer-bar" class="top-viewer-bar" role="banner">
+    <div class="viewer-bar-inner">
+      <div class="viewer-title-group">
+        <span class="viewer-badge">웹소설 리더</span>
+        <h1 id="viewer-episode-title" class="viewer-episode-title">제1화. 안개 낀 아카데미</h1>
+        <span id="viewer-chapter-title" class="viewer-chapter-title">제1장. 한밤중의 비상 소집</span>
+      </div>
+
+      <div class="viewer-actions">
+        <button type="button" id="btn-sound-toggle" class="btn-icon-label" title="효과음 켜기/끄기">
+          🔊 효과음
+        </button>
+        <button type="button" id="btn-quick-pocket" class="btn-icon-label is-hidden" title="주머니 메뉴 열기" aria-hidden="true" disabled>
+          👜 주머니
+        </button>
+        <button type="button" id="btn-author-mode" class="btn-icon-label" aria-haspopup="dialog" aria-expanded="false">
+          ✎ 편집 모드
+        </button>
+        <button type="button" id="btn-reader-settings-toggle" class="btn-icon-label" aria-haspopup="true" aria-expanded="false" title="보기 설정">
+          ⚙️ 보기 설정
+        </button>
+      </div>
+    </div>
+
+    <!-- Reader Settings Popover -->
+    <div id="reader-settings-popover" class="reader-settings-popover" role="dialog" aria-label="독서 환경 설정">
+      <div class="popover-header">
+        <h3 class="popover-title">독서 환경 설정</h3>
+        <button type="button" id="btn-close-settings" class="btn-close-text" aria-label="닫기">✕</button>
+      </div>
+
+      <div class="popover-body">
+        <!-- Theme Selection -->
+        <div class="setting-group">
+          <label class="setting-label">배경색 테마</label>
+          <div class="theme-switch-group">
+            <button type="button" class="theme-btn theme-btn-light" data-theme="light">라이트</button>
+            <button type="button" class="theme-btn theme-btn-sepia is-selected" data-theme="sepia">세피아</button>
+            <button type="button" class="theme-btn theme-btn-dark" data-theme="dark">다크</button>
+          </div>
+        </div>
+
+        <!-- Font Family Selection -->
+        <div class="setting-group">
+          <label class="setting-label">본문 서체</label>
+          <div class="font-switch-group">
+            <button type="button" class="font-family-btn is-selected font-serif" data-font="serif">명조 (소설)</button>
+            <button type="button" class="font-family-btn font-sans" data-font="sans">고딕 (현대)</button>
+            <button type="button" class="font-family-btn font-mono" data-font="mono">타자기</button>
+          </div>
+        </div>
+
+        <!-- Font Size Slider -->
+        <div class="setting-group">
+          <div class="setting-label-row">
+            <label for="setting-font-size" class="setting-label">글자 크기</label>
+            <span id="setting-font-size-val" class="setting-val-display">17px</span>
+          </div>
+          <input type="range" id="setting-font-size" min="14" max="24" step="1" value="17" class="slider-control">
+        </div>
+
+        <!-- Line Height Slider -->
+        <div class="setting-group">
+          <div class="setting-label-row">
+            <label for="setting-line-height" class="setting-label">행간 (줄 간격)</label>
+            <span id="setting-line-height-val" class="setting-val-display">1.85</span>
+          </div>
+          <input type="range" id="setting-line-height" min="1.4" max="2.4" step="0.05" value="1.85" class="slider-control">
+        </div>
+
+        <!-- Letter Spacing Slider -->
+        <div class="setting-group">
+          <div class="setting-label-row">
+            <label for="setting-letter-spacing" class="setting-label">자간 (글자 간격)</label>
+            <span id="setting-letter-spacing-val" class="setting-val-display">0px</span>
+          </div>
+          <input type="range" id="setting-letter-spacing" min="-1" max="2" step="0.2" value="0" class="slider-control">
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2. Main Stage (Story Mode ↔ Investigation Mode) -->
+  <main id="main-stage" class="main-stage">
+    
+    <!-- Mode A: Story Reading Mode -->
+    <article id="story-view" class="story-view">
+      <div class="story-reading-container">
+        <div id="story-content" class="story-content">
+          <!-- Dynamically populated novel paragraphs and choice buttons -->
+        </div>
+        <div class="story-reading-hint">
+          <span>💡 본문 여백을 탭/클릭하면 상하단 바를 숨기고 몰입 독서를 즐길 수 있습니다.</span>
+        </div>
+      </div>
+    </article>
+
+    <!-- Mode B: Layton-Style Investigation Mode -->
+    <section id="investigation-view" class="investigation-view hidden" aria-label="현장 조사 모드">
+      <!-- Investigation Stage Area -->
+      <div class="investigation-stage">
+        <div class="investigation-hud-top">
+          <div class="investigation-header-text">
+            <span class="investigation-badge">현장 탐색 모드</span>
+            <h2 id="investigation-title" class="investigation-title scene-title-pill">중앙 서고 - 금서 구역</h2>
+            <p id="investigation-subtitle" class="investigation-subtitle">조사 지점을 눌러 단서를 찾거나 인물과 대화해 보세요.</p>
+          </div>
+        </div>
+        <div id="investigation-scene-canvas" class="investigation-scene-canvas">
+          <!-- Dynamic SVG illustration injected here -->
+        </div>
+        <div id="investigation-hotspots" class="investigation-hotspots-layer">
+          <!-- Hotspots dynamically pinned via percentage coordinates -->
+        </div>
+        <button type="button" id="leave-investigation-btn" class="investigation-exit-btn" aria-label="이동하기: 조사 현장을 떠나 이야기로 돌아가기">
+          <span aria-hidden="true">👣</span>
+          <span>이동하기</span>
+        </button>
+      </div>
+
+      <div class="investigation-hint-bar">
+        <span>조사 지점을 눌러 단서를 수첩에 기록하세요. 찾아낸 단서는 다음 선택에 도움이 됩니다.</span>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 3. Bottom Floating Pocket & Rotary Wheel Menu ("주머니") -->
+  <div id="pocket-scrim" class="pocket-scrim" aria-hidden="true"></div>
+
+  <!-- Floating Pocket Handle Anchor -->
+  <button type="button" id="pocket-handle" class="pocket-handle is-hidden" aria-label="주머니 메뉴 열기" aria-expanded="false" aria-hidden="true" tabindex="-1" disabled>
+    <span class="handle-icon">👜</span>
+    <span class="handle-text">주머니</span>
+    <span id="pocket-badge" class="pocket-badge" aria-label="새로운 알림"></span>
+  </button>
+  <div id="pocket-tutorial" class="pocket-tutorial" role="status" aria-live="polite" aria-hidden="true">
+    주머니를 열어보세요
+  </div>
+
+  <!-- Floating Pocket Dock -->
+  <div id="pocket-wheel-container" class="pocket-wheel-container" role="region" aria-label="주머니 메뉴">
+    <div class="wheel-dial-wrapper">
+      <div id="rotary-wheel" class="rotary-wheel">
+      </div>
+    </div>
+    <button type="button" id="drawer-close-btn" class="btn-drawer-close" aria-label="주머니 닫기">닫기</button>
+  </div>
+
+  <!-- 4. Modals & Overlays -->
+
+  <!-- A. NPC Dialogue Overlay (Layton-Style Bottom Conversation Panel) -->
+  <div id="npc-dialogue-overlay" class="npc-dialogue-overlay hidden" role="dialog" aria-modal="true">
+    <div class="dialogue-box">
+      <div class="dialogue-header">
+        <div class="dialogue-speaker-meta">
+          <div class="dialogue-avatar">👩‍🏫</div>
+          <div class="dialogue-speaker-info">
+            <strong id="dialogue-char-name" class="dialogue-char-name">사서 엘레나</strong>
+            <span id="dialogue-char-role" class="dialogue-char-role">서고 보존 사서</span>
+          </div>
+        </div>
+        <button type="button" id="dialogue-close-btn" class="btn-close-box" aria-label="대화 종료">✕</button>
+      </div>
+
+      <div class="dialogue-speech-container">
+        <p id="dialogue-speech-text" class="dialogue-speech-text">
+          규율단 수사관님이시군요. 자정에 갑자기 서고 결계 경보가 울려서 달려왔는데... 벌써 금서가 사라져 있었어요.
+        </p>
+      </div>
+
+      <div id="dialogue-options-list" class="dialogue-options-list">
+        <!-- Interactive branching dialogue options -->
+      </div>
+    </div>
+  </div>
+
+  <!-- B. Hotspot Inspect Detail Modal -->
+  <div id="inspect-detail-modal" class="inspect-detail-modal hidden" role="dialog" aria-modal="true">
+    <div class="inspect-modal-card">
+      <header class="inspect-modal-header">
+        <span class="inspect-tag">현장 조사 결과</span>
+        <h3 id="inspect-modal-title" class="inspect-modal-title">조사 항목</h3>
+      </header>
+      <div class="inspect-modal-body">
+        <p id="inspect-modal-desc" class="inspect-modal-desc">상세 조사 내용</p>
+        <div id="inspect-modal-reward" class="inspect-modal-reward hidden"></div>
+      </div>
+      <footer class="inspect-modal-footer">
+        <button type="button" id="inspect-modal-close" class="btn-primary">확인</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- C. 4 Pocket Panels Drawer / Modal -->
+  <div id="pocket-drawer-modal" class="pocket-drawer-modal hidden" role="dialog" aria-modal="true" aria-label="주머니 보관함">
+    <div class="drawer-panel-container">
+      <header class="drawer-header">
+        <nav class="drawer-nav" role="tablist" aria-label="주머니 패널">
+          <button type="button" class="drawer-nav-tab is-active" data-panel="codex" role="tab" aria-selected="true">
+            📖 메모
+          </button>
+          <button type="button" class="drawer-nav-tab" data-panel="map" role="tab" aria-selected="false">
+            🗺️ 지도
+          </button>
+          <button type="button" class="drawer-nav-tab" data-panel="inventory" role="tab" aria-selected="false">
+            🎒 인벤토리
+          </button>
+          <button type="button" class="drawer-nav-tab" data-panel="stats" role="tab" aria-selected="false">
+            📊 상태창
+          </button>
+        </nav>
+      </header>
+
+      <!-- Panel 1: 메모 (Indexed Codex / Encyclopedia) -->
+      <section id="panel-codex" class="drawer-panel-view" role="tabpanel">
+        <div class="codex-toolbar">
+          <div class="codex-categories">
+            <button type="button" class="codex-filter-btn is-active" data-category="all" aria-pressed="true">전체</button>
+            <button type="button" class="codex-filter-btn" data-category="clue" aria-pressed="false">단서</button>
+            <button type="button" class="codex-filter-btn" data-category="character" aria-pressed="false">인물</button>
+            <button type="button" class="codex-filter-btn" data-category="magic" aria-pressed="false">마법</button>
+          </div>
+          <div class="codex-toolbar-actions">
+            <div class="codex-search-box">
+              <input type="search" id="codex-search-input" placeholder="키워드 검색..." class="search-input">
+            </div>
+            <button type="button" id="btn-memo-arrange" class="memo-rearrange-btn">재정렬</button>
+          </div>
+        </div>
+
+        <div class="codex-split-layout">
+          <div id="codex-entry-list" class="codex-entry-list">
+            <p class="hex-board-hint">기록을 선택해 내용을 확인하세요. 조합 가능한 기록은 서로 가까이 끌어 놓으면 가설로 연결됩니다. 빈 곳을 드래그해 이동하고 휠이나 두 손가락으로 확대할 수 있습니다.</p>
+            <div class="hex-board-frame">
+              <svg id="memo-hex-svg" class="hex-board-svg" viewBox="-260 -150 520 300" role="group" aria-label="메모 육각 보드">
+                <g id="memo-hex-layer"></g>
+              </svg>
+            </div>
+            <p id="memo-hex-empty" class="hex-board-empty hidden">해당 조건의 기록이 없습니다.</p>
+          </div>
+          <div id="codex-entry-detail" class="codex-entry-detail">
+            <!-- Detailed lore view -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 2: 지도 (Map) -->
+      <section id="panel-map" class="drawer-panel-view hidden" role="tabpanel">
+        <div class="map-container">
+          <div class="map-schematic-view">
+            <header class="academy-map-heading">
+              <h3>노바리스 아카데미</h3>
+              <span>NOVARIS ACADEMY</span>
+            </header>
+            <svg id="academy-map-svg" class="academy-map-svg" viewBox="-290 -175 580 340" preserveAspectRatio="xMidYMid meet" role="group" aria-label="노바리스 아카데미의 등각 지도">
+              <g id="academy-map-layer"></g>
+            </svg>
+          </div>
+          <div id="academy-map-description" class="academy-map-description" aria-live="polite">
+            <div class="academy-map-description-copy">
+              <strong id="academy-map-location-title"></strong>
+              <p id="academy-map-location-description"></p>
+            </div>
+            <span class="academy-map-arrow" aria-hidden="true">→</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 3: 소지품 (Inventory) -->
+      <section id="panel-inventory" class="drawer-panel-view hidden" role="tabpanel">
+        <div class="inventory-layout">
+          <div class="inventory-grid-wrapper">
+            <h4 class="inventory-heading">인벤토리</h4>
+            <div class="hex-board-filters" role="group" aria-label="아이템 분류">
+              <button type="button" class="inventory-filter-btn is-active" data-category="전체">전체</button>
+              <button type="button" class="inventory-filter-btn" data-category="key">장비</button>
+              <button type="button" class="inventory-filter-btn" data-category="clue_item">단서</button>
+              <button type="button" class="inventory-filter-btn" data-category="item">기타</button>
+            </div>
+            <p class="hex-board-hint">드래그로 보드를 옮기고 휠이나 두 손가락으로 확대할 수 있습니다.</p>
+            <div class="hex-board-frame">
+              <div class="hex-board-controls" role="group" aria-label="소지품 보드 보기 조절">
+                <button type="button" data-hex-board="inventory" data-hex-action="zoom-in" aria-label="소지품 보드 확대">+</button>
+                <button type="button" data-hex-board="inventory" data-hex-action="zoom-out" aria-label="소지품 보드 축소">−</button>
+                <button type="button" data-hex-board="inventory" data-hex-action="reset" aria-label="소지품 보드 초기화">초기화</button>
+              </div>
+              <svg id="inventory-hex-svg" class="hex-board-svg" viewBox="-260 -150 520 300" role="group" aria-label="소지품 육각 보드">
+                <g id="inventory-hex-layer"></g>
+              </svg>
+            </div>
+            <p id="inventory-hex-empty" class="hex-board-empty hidden">이 분류에 보관 중인 소지품이 없습니다.</p>
+          </div>
+          <div id="inventory-detail-box" class="inventory-detail-box">
+            <!-- Inspected item detail -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 4: 스탯 (Stats & Profile) -->
+      <section id="panel-stats" class="drawer-panel-view hidden" role="tabpanel">
+        <div class="stats-layout">
+          <div id="player-stats-content" class="player-stats-content">
+            <!-- Player profile & progress bars -->
+          </div>
+          <div class="stats-actions-row">
+            <button type="button" id="btn-reset-game" class="btn-danger-outline">
+              🔄 전체 진행 데이터 초기화 (다시 시작)
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- Author Edit Mode -->
+  <div id="author-editor" class="author-editor hidden" role="dialog" aria-modal="true" aria-label="편집 모드">
+    <section class="author-editor-dialog">
+      <header class="author-editor-header">
+        <div>
+          <span class="author-editor-eyebrow">작가 도구</span>
+          <h2>편집 모드</h2>
+        </div>
+        <button type="button" id="btn-author-editor-close" class="author-editor-close" aria-label="편집 모드 닫기">✕</button>
+      </header>
+      <div class="author-editor-toolbar">
+        <p>수정 내용은 이 브라우저에 자동 저장됩니다. JSON 내보내기는 백업용이며, 원본 파일에 반영하려면 내려받은 파일을 직접 적용해야 합니다.</p>
+        <div class="author-button-row">
+          <button type="button" class="author-action" data-author-action="export">데이터 내보내기 (JSON)</button>
+          <button type="button" class="author-action" data-author-action="import">불러오기</button>
+          <input type="file" id="author-import-file" accept="application/json,.json" hidden>
+        </div>
+      </div>
+      <nav class="author-editor-tabs" role="tablist" aria-label="편집할 데이터 종류">
+        <button type="button" class="author-editor-tab is-active" data-author-tab="story" role="tab" aria-selected="true">본문 · 선택지</button>
+        <button type="button" class="author-editor-tab" data-author-tab="map" role="tab" aria-selected="false">지도 타일</button>
+        <button type="button" class="author-editor-tab" data-author-tab="memo" role="tab" aria-selected="false">메모 타일</button>
+        <button type="button" class="author-editor-tab" data-author-tab="inventory" role="tab" aria-selected="false">소지품</button>
+      </nav>
+      <p id="author-editor-status" class="author-editor-status" role="status" aria-live="polite"></p>
+      <main id="author-editor-content" class="author-editor-content"></main>
+    </section>
+  </div>
+
+  <!-- 5. Toast Notifications Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <!-- Main ES6 Entry Point -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
