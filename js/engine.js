@@ -2,10 +2,10 @@
  * Narrative Branching Engine & Layton-Style Investigation Controller
  */
 
-import { state } from './state.js?v=20261121_0745';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0745';
-import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_0745';
-import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_0745';
+import { state } from './state.js?v=20261121_0835';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0835';
+import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_0835';
+import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_0835';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;',
@@ -461,6 +461,9 @@ export class GameEngine {
     // Initialize IntersectionObserver Typewriter effects for novel paragraphs
     this.initNovelTypewriters(contentContainer);
 
+    // Initialize Deferred Story Unlocks (IntersectionObserver reveals toasts only when scrolled into view)
+    this.initDeferredStoryUnlocks(contentContainer);
+
     // Initialize Interactive Topic Quizzes (정답 입력창)
     this.initStoryQuizzes(contentContainer);
 
@@ -586,6 +589,201 @@ export class GameEngine {
         }
       });
     });
+  }
+
+  initDeferredStoryUnlocks(container) {
+    if (!container) return;
+    const pendingWidgets = Array.from(container.querySelectorAll('.story-game-widget[data-pending-unlock="true"]'));
+    if (pendingWidgets.length === 0) return;
+
+    if (!('IntersectionObserver' in window)) {
+      pendingWidgets.forEach((w) => this.executeDeferredUnlock(w));
+      return;
+    }
+
+    if (!this._unlockObserversByContainer) {
+      this._unlockObserversByContainer = new WeakMap();
+    }
+    const prevObs = this._unlockObserversByContainer.get(container);
+    if (prevObs) {
+      prevObs.disconnect();
+    }
+
+    const observer = new IntersectionObserver((entries, obs) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const widget = entry.target;
+          if (widget.dataset.twLockedHidden === 'true' || widget.closest('[data-tw-locked-hidden="true"]')) {
+            return;
+          }
+          this.executeDeferredUnlock(widget);
+          obs.unobserve(widget);
+        }
+      });
+    }, {
+      root: null,
+      rootMargin: '0px 0px -40px 0px',
+      threshold: 0.1
+    });
+
+    this._unlockObserversByContainer.set(container, observer);
+    pendingWidgets.forEach((w) => observer.observe(w));
+  }
+
+  checkPendingUnlocksInElement(element) {
+    if (!element) return;
+    const widgets = [];
+    if (element.matches?.('.story-game-widget[data-pending-unlock="true"]')) {
+      widgets.push(element);
+    }
+    if (element.querySelectorAll) {
+      element.querySelectorAll('.story-game-widget[data-pending-unlock="true"]').forEach((w) => widgets.push(w));
+    }
+    widgets.forEach((widget) => {
+      const rect = widget.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {
+        this.executeDeferredUnlock(widget);
+      }
+    });
+  }
+
+  flushPendingStoryUnlocks(container = this.storyView) {
+    if (!container) return;
+    const pending = Array.from(container.querySelectorAll('.story-game-widget[data-pending-unlock="true"]'));
+    pending.forEach((w) => {
+      this.executeDeferredUnlock(w);
+    });
+  }
+
+  executeDeferredUnlock(widget) {
+    if (!widget || widget.dataset.pendingUnlock !== 'true') return;
+    const eventKey = widget.dataset.unlockEvent;
+    if (!eventKey || state.getFlag(eventKey)) {
+      widget.removeAttribute('data-pending-unlock');
+      widget.classList.remove('is-pending-unlock');
+      return;
+    }
+
+    state.setFlag(eventKey, true);
+    widget.removeAttribute('data-pending-unlock');
+    widget.classList.remove('is-pending-unlock');
+
+    const type = widget.dataset.unlockType;
+    let payload = {};
+    try {
+      payload = JSON.parse(widget.dataset.unlockPayload || '{}');
+    } catch (e) {
+      console.warn('Unlock payload parse error:', e);
+    }
+
+    const statusEl = widget.querySelector('[data-widget-status="true"]');
+
+    switch (type) {
+      case 'item': {
+        state.addItem({
+          id: payload.itemId,
+          name: payload.itemName,
+          desc: payload.itemDesc,
+          icon: payload.itemIcon,
+          quantity: 1,
+          type: payload.itemType || 'item'
+        });
+        this.playAudio('itemPickup');
+        this.showToast(`[${payload.itemName}] 소지품을 획득했습니다!`, 'success', (payload.itemIcon || '').includes('/') ? '🎁' : (payload.itemIcon || '🎁'));
+        if (statusEl) statusEl.textContent = '✨ 새로운 소지품!';
+        break;
+      }
+      case 'item_use': {
+        const removed = state.removeItem(payload.itemId, 1);
+        if (!removed && payload.existingId) {
+          state.removeItem(payload.existingId, 1);
+        }
+        this.playAudio('itemPickup');
+        this.showToast(`[${payload.itemName}] 아이템을 사용했습니다. (소지품 소모)`, 'info', (payload.itemIcon || '').includes('/') ? '🎒' : (payload.itemIcon || '🎒'));
+        if (statusEl) statusEl.textContent = '✨ 소모 완료 (-1)';
+        break;
+      }
+      case 'stat': {
+        const currentVal = state.modifyStat(payload.statKey, payload.delta);
+        this.playAudio('codexUnlock');
+        const sign = payload.delta >= 0 ? `+${payload.delta}` : `${payload.delta}`;
+        this.showToast(`[${payload.statLabel} ${sign}] 능력이 변동되었습니다!`, 'info', '⚡');
+        if (statusEl) statusEl.textContent = '✨ 스탯 갱신!';
+        const descEl = widget.querySelector('.widget-desc');
+        if (descEl) descEl.textContent = `${payload.statDesc} (현재: ${currentVal})`;
+        break;
+      }
+      case 'character': {
+        state.unlockCodex(payload.charId, {
+          title: payload.charName,
+          summary: payload.charDesc,
+          description: payload.charDesc,
+          icon: payload.charIcon,
+          category: 'character'
+        });
+        this.playAudio('codexUnlock');
+        this.showToast(`[${payload.charName}] 인물 도감에 새로운 인물이 등록되었습니다!`, 'info', (payload.charIcon || '').includes('/') ? '👤' : (payload.charIcon || '👤'));
+        if (statusEl) statusEl.textContent = '✨ 새 인물 등록!';
+        break;
+      }
+      case 'topic': {
+        state.unlockCodex(payload.topicId, {
+          title: payload.topicTitle,
+          summary: payload.topicDesc,
+          description: payload.topicDesc,
+          icon: payload.topicIcon,
+          category: 'clue'
+        });
+        this.playAudio('codexUnlock');
+        this.showToast(`[${payload.topicTitle}] 단서를 확인했습니다!`, 'info', (payload.topicIcon || '').includes('/') ? '🔍' : (payload.topicIcon || '🔍'));
+        if (statusEl) statusEl.textContent = '✨ 새 단서 발견!';
+        break;
+      }
+      case 'clue': {
+        state.unlockClueCondition(payload.clueId);
+        if (payload.clueLabel && payload.clueLabel !== payload.clueId) {
+          state.unlockClueCondition(payload.clueLabel);
+        }
+        if (payload.matchedClueId && payload.matchedClueId !== payload.clueId) {
+          state.unlockClueCondition(payload.matchedClueId);
+        }
+        if (payload.parentCodexId) {
+          state.unlockCodex(payload.parentCodexId);
+        }
+        this.playAudio('codexUnlock');
+        this.showToast(`[${payload.clueLabel}] 단서 조건을 수첩에 등록했습니다!`, 'info', '🔘');
+        if (statusEl) statusEl.textContent = '✨ 새 단서 획득!';
+        break;
+      }
+      case 'clue_major': {
+        state.unlockCodex(payload.topicId);
+        this.playAudio('codexUnlock');
+        this.showToast(`[${payload.topicTitle}] 단서를 확인했습니다!`, 'info', (payload.topicIcon || '').includes('/') ? '🔍' : (payload.topicIcon || '🔍'));
+        if (statusEl) statusEl.textContent = '✨ 새 단서 발견!';
+        break;
+      }
+      case 'record': {
+        state.unlockTileRecord(payload.recordId, {
+          tileId: payload.tileId,
+          text: payload.recordText
+        });
+        this.playAudio('codexUnlock');
+        if (statusEl) statusEl.textContent = '✨ 새 정보 기록!';
+        break;
+      }
+      case 'subitem': {
+        state.setFlag(`unlocked_sub_${payload.subId}`, true);
+        if (payload.parentId) {
+          state.unlockCodex(payload.parentId);
+        }
+        this.playAudio('codexUnlock');
+        this.showToast(`[${payload.finalLabel}] 발견! (${payload.parentTitle || '수첩'})`, 'info', '⬜');
+        if (statusEl) statusEl.textContent = '✨ 새로 등록됨';
+        break;
+      }
+    }
+
+    widget.classList.add('is-new-anim');
   }
 
   initNovelTypewriters(container) {
@@ -740,6 +938,7 @@ export class GameEngine {
         block.style.pointerEvents = '';
         block.style.opacity = '1';
         block.style.transform = 'translateY(0)';
+        this.checkPendingUnlocksInElement(block);
       }
     };
 
@@ -752,6 +951,7 @@ export class GameEngine {
       allSequentialBlocks.forEach((b) => {
         revealBlockWithFade(b);
       });
+      this.checkPendingUnlocksInElement(container);
     };
 
     if (container._twSkipHandler) {
@@ -1019,25 +1219,20 @@ export class GameEngine {
       const eventKey = `event_item_${nodeId}_${index}_${itemId}`;
       const isNew = !state.getFlag(eventKey);
 
-      if (isNew) {
-        state.setFlag(eventKey, true);
-        state.addItem({
-          id: itemId,
-          name: itemName,
-          desc: itemDesc,
-          icon: itemIcon,
-          quantity: 1,
-          type: existing ? existing.type : 'item'
-        });
-        this.playAudio('itemPickup');
-        this.showToast(`[${itemName}] 소지품을 획득했습니다!`, 'success', itemIcon.includes('/') ? '🎁' : itemIcon);
-      }
+      const payload = {
+        itemId,
+        itemName,
+        itemDesc,
+        itemIcon,
+        itemType: existing ? existing.type : 'item'
+      };
 
       return `
-        <div class="story-game-widget widget-item ${isNew ? 'is-new-anim' : ''}">
+        <div class="story-game-widget widget-item ${isNew ? 'is-pending-unlock' : ''}"
+             ${isNew ? `data-pending-unlock="true" data-unlock-type="item" data-unlock-event="${escapeHtml(eventKey)}" data-unlock-payload="${escapeHtml(JSON.stringify(payload))}"` : ''}>
           <div class="widget-header">
             <span class="widget-badge">🎁 아이템 획득</span>
-            <span class="widget-status">${isNew ? '✨ 새로운 소지품!' : '✔️ 획득 완료'}</span>
+            <span class="widget-status" data-widget-status="true">${isNew ? '✨ 새로운 소지품 발견' : '✔️ 획득 완료'}</span>
           </div>
           <div class="widget-body">
             <div class="widget-icon">${escapeHtml(itemIcon)}</div>
@@ -1067,21 +1262,20 @@ export class GameEngine {
       const eventKey = `event_item_use_${nodeId}_${index}_${itemId}`;
       const isNew = !state.getFlag(eventKey);
 
-      if (isNew) {
-        state.setFlag(eventKey, true);
-        const removed = state.removeItem(itemId, 1);
-        if (!removed && existing?.id) {
-          state.removeItem(existing.id, 1);
-        }
-        this.playAudio('itemPickup');
-        this.showToast(`[${itemName}] 아이템을 사용했습니다. (소지품 소모)`, 'info', itemIcon.includes('/') ? '🎒' : itemIcon);
-      }
+      const payload = {
+        itemId,
+        existingId: existing?.id,
+        itemName,
+        itemDesc,
+        itemIcon
+      };
 
       return `
-        <div class="story-game-widget widget-item widget-item-use ${isNew ? 'is-new-anim' : ''}">
+        <div class="story-game-widget widget-item widget-item-use ${isNew ? 'is-pending-unlock' : ''}"
+             ${isNew ? `data-pending-unlock="true" data-unlock-type="item_use" data-unlock-event="${escapeHtml(eventKey)}" data-unlock-payload="${escapeHtml(JSON.stringify(payload))}"` : ''}>
           <div class="widget-header">
             <span class="widget-badge" style="background:#2D3748; color:#68D391; border:1px solid rgba(104, 211, 145, 0.4);">🎒 아이템 사용</span>
-            <span class="widget-status" style="color:#68D391;">${isNew ? '✨ 소모 완료 (-1)' : '✔️ 사용 완료'}</span>
+            <span class="widget-status" data-widget-status="true" style="color:#68D391;">${isNew ? '✨ 소모 대기' : '✔️ 사용 완료'}</span>
           </div>
           <div class="widget-body">
             <div class="widget-icon" style="background:rgba(104, 211, 145, 0.15); color:#68D391; border:1.5px solid rgba(104, 211, 145, 0.3);">${escapeHtml(itemIcon)}</div>
@@ -1133,18 +1327,20 @@ export class GameEngine {
       const isNew = !state.getFlag(eventKey);
       const sign = delta >= 0 ? `+${delta}` : `${delta}`;
 
-      let currentVal = state.getPlayer()?.stats?.[statKey] ?? 0;
-      if (isNew) {
-        state.setFlag(eventKey, true);
-        currentVal = state.modifyStat(statKey, delta);
-        this.playAudio('codexUnlock');
-        this.showToast(`[${statLabel} ${sign}] 능력이 변동되었습니다!`, 'info', '⚡');
-      }
+      const currentVal = state.getPlayer()?.stats?.[statKey] ?? 0;
+      const payload = {
+        statKey,
+        delta,
+        statLabel,
+        statDesc
+      };
+
       return `
-        <div class="story-game-widget widget-stat ${isNew ? 'is-new-anim' : ''}">
+        <div class="story-game-widget widget-stat ${isNew ? 'is-pending-unlock' : ''}"
+             ${isNew ? `data-pending-unlock="true" data-unlock-type="stat" data-unlock-event="${escapeHtml(eventKey)}" data-unlock-payload="${escapeHtml(JSON.stringify(payload))}"` : ''}>
           <div class="widget-header">
             <span class="widget-badge">⚡ 능력치 변동</span>
-            <span class="widget-status">${isNew ? '✨ 스탯 갱신!' : '✔️ 반영 완료'}</span>
+            <span class="widget-status" data-widget-status="true">${isNew ? '✨ 스탯 갱신!' : '✔️ 반영 완료'}</span>
           </div>
           <div class="widget-body">
             <div class="widget-icon">📈</div>
@@ -1225,24 +1421,19 @@ export class GameEngine {
       const eventKey = `event_char_${nodeId}_${index}_${charId}`;
       const isNew = !state.getFlag(eventKey);
 
-      if (isNew) {
-        state.setFlag(eventKey, true);
-        state.unlockCodex(charId, {
-          title: charName,
-          summary: charDesc,
-          description: charDesc,
-          icon: charIcon,
-          category: 'character'
-        });
-        this.playAudio('codexUnlock');
-        this.showToast(`[${charName}] 인물 도감에 새로운 인물이 등록되었습니다!`, 'info', charIcon.includes('/') ? '👤' : charIcon);
-      }
+      const payload = {
+        charId,
+        charName,
+        charDesc,
+        charIcon
+      };
 
       return `
-        <div class="story-game-widget widget-character ${isNew ? 'is-new-anim' : ''}">
+        <div class="story-game-widget widget-character ${isNew ? 'is-pending-unlock' : ''}"
+             ${isNew ? `data-pending-unlock="true" data-unlock-type="character" data-unlock-event="${escapeHtml(eventKey)}" data-unlock-payload="${escapeHtml(JSON.stringify(payload))}"` : ''}>
           <div class="widget-header">
             <span class="widget-badge" style="background:#1E293B; color:#60A5FA; border:1px solid rgba(96, 165, 250, 0.4);">👤 인물 등록</span>
-            <span class="widget-status">${isNew ? '✨ 새 인물 등록!' : '✔️ 도감 등록됨'}</span>
+            <span class="widget-status" data-widget-status="true">${isNew ? '✨ 새 인물 등록!' : '✔️ 도감 등록됨'}</span>
           </div>
           <div class="widget-body">
             <div class="widget-icon" style="background:rgba(30, 41, 59, 0.85); color:#60A5FA; border-radius:50%; width:44px; height:44px; display:grid; place-items:center; font-size:22px; border:2px solid #60A5FA; overflow:hidden;">${charIcon.includes('/') ? `<img src="${escapeHtml(charIcon)}" style="width:100%; height:100%; object-fit:contain; border-radius:50%;">` : escapeHtml(charIcon)}</div>
@@ -1311,24 +1502,19 @@ export class GameEngine {
       const eventKey = `event_topic_${nodeId}_${index}_${topicId}`;
       const isNew = !state.getFlag(eventKey);
 
-      if (isNew) {
-        state.setFlag(eventKey, true);
-        state.unlockCodex(topicId, {
-          title: topicTitle,
-          summary: topicDesc,
-          description: topicDesc,
-          icon: topicIcon,
-          category: 'clue'
-        });
-        this.playAudio('codexUnlock');
-        this.showToast(`[${topicTitle}] 단서를 확인했습니다!`, 'info', topicIcon.includes('/') ? '🔍' : topicIcon);
-      }
+      const payload = {
+        topicId,
+        topicTitle,
+        topicDesc,
+        topicIcon
+      };
 
       return `
-        <div class="story-game-widget widget-topic ${isNew ? 'is-new-anim' : ''}">
+        <div class="story-game-widget widget-topic ${isNew ? 'is-pending-unlock' : ''}"
+             ${isNew ? `data-pending-unlock="true" data-unlock-type="topic" data-unlock-event="${escapeHtml(eventKey)}" data-unlock-payload="${escapeHtml(JSON.stringify(payload))}"` : ''}>
           <div class="widget-header">
             <span class="widget-badge" style="background:#1E293B; color:#F59E0B; border:1px solid rgba(245, 158, 11, 0.4);">${escapeHtml(topicIcon)} ${escapeHtml(topicTitle)}</span>
-            <span class="widget-status">${isNew ? '✨ 새 단서 발견!' : '✔️ 수첩 등록됨'}</span>
+            <span class="widget-status" data-widget-status="true">${isNew ? '✨ 새 단서 발견!' : '✔️ 수첩 등록됨'}</span>
           </div>
           <div class="widget-body">
             <div class="widget-icon">${escapeHtml(topicIcon)}</div>
@@ -1381,23 +1567,24 @@ export class GameEngine {
           const topicId = majorEntry.id;
           const eventKey = `event_clue_${nodeId}_${index}_${topicId}`;
           const isNew = !state.getFlag(eventKey);
-          if (isNew) {
-            state.setFlag(eventKey, true);
-            state.unlockCodex(topicId);
-            this.playAudio('codexUnlock');
-            this.showToast(`[${majorEntry.title}] 단서를 확인했습니다!`, 'info', (majorEntry.icon || '🔍').includes('/') ? '🔍' : (majorEntry.icon || '🔍'));
-          }
+          const payload = {
+            topicId,
+            topicTitle: majorEntry.title,
+            topicDesc: parts[1] || majorEntry.summary || majorEntry.description,
+            topicIcon: majorEntry.icon || '🔍'
+          };
           return `
-            <div class="story-game-widget widget-topic ${isNew ? 'is-new-anim' : ''}">
+            <div class="story-game-widget widget-topic ${isNew ? 'is-pending-unlock' : ''}"
+                 ${isNew ? `data-pending-unlock="true" data-unlock-type="clue_major" data-unlock-event="${escapeHtml(eventKey)}" data-unlock-payload="${escapeHtml(JSON.stringify(payload))}"` : ''}>
               <div class="widget-header">
                 <span class="widget-badge" style="background:#1E293B; color:#F59E0B; border:1px solid rgba(245, 158, 11, 0.4);">${escapeHtml(majorEntry.icon || '🔍')} ${escapeHtml(majorEntry.title)}</span>
-                <span class="widget-status">${isNew ? '✨ 새 단서 발견!' : '✔️ 수첩 등록됨'}</span>
+                <span class="widget-status" data-widget-status="true">${isNew ? '✨ 새 단서 발견!' : '✔️ 수첩 등록됨'}</span>
               </div>
               <div class="widget-body">
                 <div class="widget-icon">${escapeHtml(majorEntry.icon || '🗂️')}</div>
                 <div class="widget-details">
                   <strong class="widget-name">${escapeHtml(majorEntry.title)}</strong>
-                  <p class="widget-desc">${escapeHtml(parts[1] || majorEntry.summary || majorEntry.description)}</p>
+                  <p class="widget-desc">${escapeHtml(payload.topicDesc)}</p>
                 </div>
               </div>
             </div>
@@ -1413,27 +1600,21 @@ export class GameEngine {
       const eventKey = `event_cluecond_${nodeId}_${index}_${clueId}`;
       const isNew = !state.getFlag(eventKey);
 
-      if (isNew) {
-        state.setFlag(eventKey, true);
-        state.unlockClueCondition(clueId);
-        if (clueLabel && clueLabel !== clueId) {
-          state.unlockClueCondition(clueLabel);
-        }
-        if (matchedClue?.id && matchedClue.id !== clueId) {
-          state.unlockClueCondition(matchedClue.id);
-        }
-        if (matchedParent) {
-          state.unlockCodex(matchedParent.id);
-        }
-        this.playAudio('codexUnlock');
-        this.showToast(`[${clueLabel}] 단서 조건을 수첩에 등록했습니다!`, 'info', '🔘');
-      }
+      const payload = {
+        clueId,
+        clueLabel,
+        matchedClueId: matchedClue?.id,
+        parentCodexId: matchedParent?.id,
+        displayParentTitle,
+        displayDesc
+      };
 
       return `
-        <div class="story-game-widget widget-clue ${isNew ? 'is-new-anim' : ''}">
+        <div class="story-game-widget widget-clue ${isNew ? 'is-pending-unlock' : ''}"
+             ${isNew ? `data-pending-unlock="true" data-unlock-type="clue" data-unlock-event="${escapeHtml(eventKey)}" data-unlock-payload="${escapeHtml(JSON.stringify(payload))}"` : ''}>
           <div class="widget-header">
             <span class="widget-badge" style="background:#2D323F; color:#D4AF37; border:1px solid rgba(212, 175, 55, 0.6);">🔘 단서 발견</span>
-            <span class="widget-status">${isNew ? '✨ 새 단서 획득!' : '✔️ 메모 보드 등록됨'}</span>
+            <span class="widget-status" data-widget-status="true">${isNew ? '✨ 새 단서 획득!' : '✔️ 메모 보드 등록됨'}</span>
           </div>
           <div class="widget-body">
             <div class="widget-icon" style="background:rgba(45, 50, 63, 0.85); color:#D4AF37; border-radius:50%; width:44px; height:44px; display:grid; place-items:center; font-size:20px; border:2px solid #D4AF37;">🔘</div>
@@ -1509,23 +1690,21 @@ export class GameEngine {
 
       const eventKey = `event_rec_${nodeId}_${index}_${recordId}`;
       const isNew = !state.getFlag(eventKey);
-
-      if (isNew) {
-        state.setFlag(eventKey, true);
-        state.unlockTileRecord(recordId, {
-          tileId: targetTile ? targetTile.id : parts[0],
-          text: recordText
-        });
-        this.playAudio('codexUnlock');
-      }
-
       const targetTileLabel = targetTile ? targetTile.label : parts[0];
 
+      const payload = {
+        recordId,
+        tileId: targetTile ? targetTile.id : parts[0],
+        recordText,
+        targetTileLabel
+      };
+
       return `
-        <div class="story-game-widget widget-record ${isNew ? 'is-new-anim' : ''}">
+        <div class="story-game-widget widget-record ${isNew ? 'is-pending-unlock' : ''}"
+             ${isNew ? `data-pending-unlock="true" data-unlock-type="record" data-unlock-event="${escapeHtml(eventKey)}" data-unlock-payload="${escapeHtml(JSON.stringify(payload))}"` : ''}>
           <div class="widget-header">
             <span class="widget-badge" style="background:#1E293B; color:#60A5FA; border:1px solid rgba(96, 165, 250, 0.4);">📝 추가 조사 기록</span>
-            <span class="widget-status">${isNew ? '✨ 새 정보 기록!' : '✔️ 수첩에 기록됨'}</span>
+            <span class="widget-status" data-widget-status="true">${isNew ? '✨ 새 정보 기록!' : '✔️ 수첩에 기록됨'}</span>
           </div>
           <div class="widget-body">
             <div class="widget-icon" style="background:rgba(30, 41, 59, 0.85); color:#60A5FA; border-radius:50%; width:44px; height:44px; display:grid; place-items:center; font-size:20px; border:2px solid #60A5FA;">📝</div>
@@ -1635,24 +1814,22 @@ export class GameEngine {
 
       const eventKey = `event_subitem_${nodeId}_${index}_${subId}`;
       const isNew = !state.getFlag(eventKey);
-
-      if (isNew) {
-        state.setFlag(eventKey, true);
-        state.setFlag(`unlocked_sub_${subId}`, true);
-        if (parentEntry) {
-          state.unlockCodex(parentEntry.id);
-        }
-        this.playAudio('codexUnlock');
-        this.showToast(`[${finalLabel}] 발견! (${parentEntry?.title || '수첩'})`, 'info', '⬜');
-      }
-
       const displayParentTitle = parentEntry?.title || parentQuery || '';
 
+      const payload = {
+        subId,
+        finalLabel,
+        finalDesc,
+        parentId: parentEntry?.id,
+        parentTitle: parentEntry?.title
+      };
+
       return `
-        <div class="story-game-widget widget-subitem ${isNew ? 'is-new-anim' : ''}">
+        <div class="story-game-widget widget-subitem ${isNew ? 'is-pending-unlock' : ''}"
+             ${isNew ? `data-pending-unlock="true" data-unlock-type="subitem" data-unlock-event="${escapeHtml(eventKey)}" data-unlock-payload="${escapeHtml(JSON.stringify(payload))}"` : ''}>
           <div class="widget-header">
             <span class="widget-badge" style="background:#1E293B; color:#E2E8F0; border:1px solid rgba(226, 232, 240, 0.4);">⬜ 새로운 정보</span>
-            <span class="widget-status">${isNew ? '✨ 새로 등록됨' : '✔️ 수첩에 등록됨'}</span>
+            <span class="widget-status" data-widget-status="true">${isNew ? '✨ 새로 등록됨' : '✔️ 수첩에 등록됨'}</span>
           </div>
           <div class="widget-body">
             <div class="widget-icon" style="background:#F8FAFC; color:#0F172A; border-radius:8px; width:44px; height:44px; display:grid; place-items:center; font-size:20px; font-weight:800; border:2px solid #CBD5E1; box-shadow:0 2px 8px rgba(0,0,0,0.15);">⬜</div>
@@ -1902,6 +2079,7 @@ export class GameEngine {
   }
 
   selectChoice(node, choiceIndex, choiceBtn = null) {
+    this.flushPendingStoryUnlocks(this.storyView);
     const choice = node.choices[choiceIndex];
     if (!choice) return;
 
@@ -2266,23 +2444,73 @@ export class GameEngine {
           </span>
         `;
 
-      const tooltipText = isCharDeparted
-        ? `${escapeHtml(hs.title)} <span class="status-checked">[대화 완료 - 자리 비움]</span>`
-        : `${escapeHtml(hs.title)} ${isCollected ? '<span class="status-checked">[완료]</span>' : ''}`;
+      const tooltipTitle = hs.type === 'character' ? (hs.characterName || hs.title) : hs.title;
+      const tooltipAction = hs.type === 'character' ? '대화하기' : '조사하기';
 
       spot.innerHTML = `
         <span class="hotspot-pulse"></span>
         ${hotspotMarker}
-        <span class="hotspot-tooltip">${tooltipText}</span>
+        <span class="hotspot-tooltip">
+          <span class="hotspot-tooltip-title">${escapeHtml(tooltipTitle)} ${isCollected ? '<span class="status-checked">[완료]</span>' : ''}</span>
+          <span class="hotspot-tooltip-hint">👆 다시 탭하여 ${escapeHtml(tooltipAction)}</span>
+        </span>
       `;
+
+      let lastTapTime = 0;
+      const doInteract = () => {
+        spot.classList.remove('is-selected');
+        this.interactHotspot(hs, spot);
+      };
 
       spot.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.interactHotspot(hs, spot);
+        if (spot.disabled || spot.classList.contains('is-departed')) return;
+
+        const now = Date.now();
+        const timeSinceLastTap = now - lastTapTime;
+        lastTapTime = now;
+
+        const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+        const isTouchPointer = e.pointerType === 'touch';
+        const isMobileLike = isTouchDevice || isTouchPointer;
+
+        if (isMobileLike) {
+          // If already selected or fast double-tap (<500ms) -> interact!
+          if (spot.classList.contains('is-selected') || timeSinceLastTap < 500) {
+            doInteract();
+          } else {
+            // First tap: select and show tooltip/explanation
+            this.hotspotsLayer.querySelectorAll('.investigation-hotspot.is-selected').forEach((s) => {
+              if (s !== spot) s.classList.remove('is-selected');
+            });
+            spot.classList.add('is-selected');
+          }
+        } else {
+          // Desktop mouse: hover already showed tooltip, direct click interacts
+          doInteract();
+        }
+      });
+
+      spot.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        if (spot.disabled || spot.classList.contains('is-departed')) return;
+        doInteract();
       });
 
       this.hotspotsLayer.appendChild(spot);
     });
+
+    // Deselect hotspots when tapping outside
+    if (this.hotspotsLayer && !this.hotspotsLayer.dataset.boundDeselect) {
+      this.hotspotsLayer.dataset.boundDeselect = 'true';
+      this.hotspotsLayer.addEventListener('click', (e) => {
+        if (!e.target.closest('.investigation-hotspot')) {
+          this.hotspotsLayer.querySelectorAll('.investigation-hotspot.is-selected').forEach((s) => {
+            s.classList.remove('is-selected');
+          });
+        }
+      });
+    }
   }
 
   unlockSubItem(subQuery, optionalParent = null, optionalDesc = null) {
@@ -2520,6 +2748,7 @@ export class GameEngine {
     });
     containerEl.innerHTML = renderedParts.join('');
     this.initNovelTypewriters?.(containerEl);
+    this.initDeferredStoryUnlocks?.(containerEl);
     this.initStoryQuizzes?.(containerEl);
     this.initStoryExplanationWidgets?.(containerEl);
   }
@@ -2911,6 +3140,7 @@ export class GameEngine {
   bindInlineStoryWidgets(container) {
     if (!container) return;
     this.initNovelTypewriters?.(container);
+    this.initDeferredStoryUnlocks?.(container);
     this.initStoryQuizzes?.(container);
     this.initStoryExplanationWidgets?.(container);
     this.initItemAcquisitionWidgets?.(container);

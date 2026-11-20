@@ -1,5 +1,5 @@
-import { state } from './state.js?v=20261121_0745';
-import { CODEX_DATA } from './data/codexData.js?v=20261121_0745';
+import { state } from './state.js?v=20261121_0835';
+import { CODEX_DATA } from './data/codexData.js?v=20261121_0835';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
