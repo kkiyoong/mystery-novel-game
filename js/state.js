@@ -10,8 +10,8 @@ const DEFAULT_STATE = {
   mode: 'home', // 'home' | 'story' | 'investigation'
   lastActiveMode: 'story',
   lastActiveNodeId: 'ep1_pocket_intro',
-  lastActiveLocationId: 'loc_library',
-  currentLocationId: 'loc_library',
+  lastActiveLocationId: 'loc_main',
+  currentLocationId: 'loc_main',
   currentMapTileKey: null,
   hasPocket: false,
   hasOpenedPocket: false,
@@ -41,7 +41,7 @@ const DEFAULT_STATE = {
   ],
   unlockedCodex: {},
   unlockedTileRecords: {},
-  discoveredLocations: ['loc_library', 'loc_main'],
+  discoveredLocations: ['loc_main'],
   flags: {},
   collectedHotspots: [],
   readerSettings: {
@@ -73,7 +73,7 @@ class GameState {
         const lastActiveMode = parsed.lastActiveMode || (parsed.mode === 'investigation' ? 'investigation' : 'story');
         const lastActiveNodeId = parsed.lastActiveNodeId || parsed.currentNodeId || DEFAULT_STATE.lastActiveNodeId;
         const lastActiveLocationId = parsed.lastActiveLocationId || parsed.currentLocationId || DEFAULT_STATE.lastActiveLocationId;
-        return {
+        const loadedState = {
           ...DEFAULT_STATE,
           ...parsed,
           mode: 'home',
@@ -112,6 +112,20 @@ class GameState {
             ...(parsed.unlockedTileRecords || {})
           }
         };
+
+        // 도서관을 실제로 방문한 적이 없는 경우 discoveredLocations에서 loc_library 제거 (오표시 보정)
+        const hasActuallyVisitedLibrary = (loadedState.history || []).includes('story_1795179565179') ||
+          (loadedState.collectedHotspots || []).some(h => String(h).includes('1795178580065'));
+        if (!hasActuallyVisitedLibrary && Array.isArray(loadedState.discoveredLocations)) {
+          loadedState.discoveredLocations = loadedState.discoveredLocations.filter(id => id !== 'loc_library');
+          if (loadedState.currentLocationId === 'loc_library') {
+            loadedState.currentLocationId = 'loc_main';
+          }
+          if (loadedState.lastActiveLocationId === 'loc_library' && loadedState.lastActiveMode !== 'investigation') {
+            loadedState.lastActiveLocationId = 'loc_main';
+          }
+        }
+        return loadedState;
       }
     } catch (e) {
       console.warn('Failed to load saved state, using default state:', e);

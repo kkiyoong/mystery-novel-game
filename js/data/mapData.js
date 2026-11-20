@@ -14,7 +14,6 @@ export const MAP_LOCATIONS = [
       "y": 55
     },
     "unlocked": true,
-    "isCurrent": true,
     "hasInvestigation": true,
     "description": "수만 권의 고서와 마법 봉인 구역이 자리 잡은 웅장한 도서관. ",
     "targetStoryNode": "story_1795179565179",
@@ -98,6 +97,7 @@ export const MAP_LOCATIONS = [
       "y": 55
     },
     "unlocked": true,
+    "isCurrent": true,
     "hasInvestigation": false,
     "targetStoryNode": "story_1795161633215",
     "description": "아카데미 중앙 본관. 약초학 강의실에서 퀴즈의 답을 맞출 수 있습니다."

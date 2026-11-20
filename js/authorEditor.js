@@ -143,6 +143,29 @@ function ensureMainBuildingData() {
       }
     });
   });
+
+  // 레거시 삭제된 도서관 핫스팟 제거 (기초 식물 도감 hotspot_1795178580065 외 과거 삭제된 핫스팟이 로컬스토리지에서 복원되는 현상 방지)
+  const legacyLibraryHotspotIds = new Set([
+    'hotspot_floor_crack',
+    'hotspot_desk_drawer',
+    'hotspot_broken_window',
+    'hotspot_window_clue',
+    'hotspot_bookshelf_gap',
+    'hotspot_librarian'
+  ]);
+  if (INVESTIGATION_SCENES?.loc_library?.hotspots) {
+    INVESTIGATION_SCENES.loc_library.hotspots = INVESTIGATION_SCENES.loc_library.hotspots.filter(
+      hs => !legacyLibraryHotspotIds.has(hs.id)
+    );
+  }
+
+  // MAP_LOCATIONS 에서 loc_library 가 isCurrent 로 남아있는 경우 보정
+  if (Array.isArray(MAP_LOCATIONS)) {
+    const libLoc = MAP_LOCATIONS.find(l => l.id === 'loc_library');
+    if (libLoc && libLoc.isCurrent) {
+      delete libLoc.isCurrent;
+    }
+  }
 }
 
 function syncAllItemsFromData(storyNodes, investigationScenes, inventoryItems) {

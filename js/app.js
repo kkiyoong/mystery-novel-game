@@ -365,13 +365,51 @@ class App {
   }
 
   renderHomeProgress() {
-    const lastMode = state.getLastActiveMode();
-    const lastNodeId = state.getLastActiveNodeId();
-    const lastLocId = state.getLastActiveLocationId();
+    const history = state.getHistory ? state.getHistory() : (state.data?.history || []);
+    const isBeginning = (history.length <= 1) &&
+      !state.hasPocket() &&
+      Object.keys(state.data?.flags || {}).length === 0 &&
+      (state.data?.collectedHotspots || []).length === 0;
 
     const locEl = document.getElementById('home-progress-location');
     const sumEl = document.getElementById('home-progress-summary');
+    const contTitleEl = document.getElementById('home-continue-title');
     const contSubEl = document.getElementById('home-continue-subtext');
+    const tagEl = document.getElementById('home-progress-tag');
+    const badgeEl = document.getElementById('home-progress-badge');
+    const chipEl = document.getElementById('home-progress-chip');
+    const summaryLabelEl = document.getElementById('home-progress-summary-label');
+    const newGameBtn = document.getElementById('btn-home-new-game');
+
+    if (isBeginning) {
+      if (tagEl) tagEl.textContent = '📖 제1화 도입부';
+      if (badgeEl) {
+        badgeEl.textContent = '시작 대기';
+        badgeEl.className = 'progress-badge is-start';
+      }
+      if (chipEl) chipEl.textContent = '시작 위치';
+      if (summaryLabelEl) summaryLabelEl.textContent = '도입부 안내';
+      if (locEl) locEl.textContent = '본관 복도 (새로운 룸메이트)';
+      if (sumEl) sumEl.textContent = '노바리스 아카데미 입학식이 끝나고 기숙사로 향하는 길, 뜻밖의 룸메이트를 마주하게 됩니다.';
+      if (contTitleEl) contTitleEl.textContent = '이야기 시작하기';
+      if (contSubEl) contSubEl.textContent = '제1화 도입부부터 읽기';
+      if (newGameBtn) newGameBtn.style.display = 'none';
+      return;
+    }
+
+    if (newGameBtn) newGameBtn.style.display = '';
+    if (tagEl) tagEl.textContent = '📍 최근 진행 위치';
+    if (badgeEl) {
+      badgeEl.textContent = '진행 중';
+      badgeEl.className = 'progress-badge';
+    }
+    if (chipEl) chipEl.textContent = '현위치';
+    if (summaryLabelEl) summaryLabelEl.textContent = '최근 사건 요약';
+    if (contTitleEl) contTitleEl.textContent = '이어하기';
+
+    const lastMode = state.getLastActiveMode();
+    const lastNodeId = state.getLastActiveNodeId();
+    const lastLocId = state.getLastActiveLocationId();
 
     if (lastMode === 'investigation') {
       const scene = INVESTIGATION_SCENES[lastLocId] || { title: '현장 조사', subtitle: '단서 조사 및 인물 탐색 진행 중' };
@@ -391,10 +429,24 @@ class App {
     if (homeView) homeView.classList.add('hidden');
     this.engine.playAudio('click');
 
+    const history = state.getHistory ? state.getHistory() : (state.data?.history || []);
+    const isBeginning = (history.length <= 1) &&
+      !state.hasPocket() &&
+      Object.keys(state.data?.flags || {}).length === 0 &&
+      (state.data?.collectedHotspots || []).length === 0;
+
     if (targetNodeId) {
       state.setMode('story');
       state.setCurrentNode(targetNodeId);
       this.engine.renderStoryNode(targetNodeId);
+      this.syncPocketAvailability();
+      return;
+    }
+
+    if (isBeginning) {
+      state.setMode('story');
+      state.setCurrentNode('ep1_pocket_intro');
+      this.engine.renderStoryNode('ep1_pocket_intro');
       this.syncPocketAvailability();
       return;
     }
@@ -414,8 +466,16 @@ class App {
   }
 
   startNewGame() {
-    const confirmed = window.confirm('진행 데이터를 처음 상태로 되돌리고 제1화 도입부부터 새로 시작하시겠습니까?');
-    if (!confirmed) return;
+    const history = state.getHistory ? state.getHistory() : (state.data?.history || []);
+    const isBeginning = (history.length <= 1) &&
+      !state.hasPocket() &&
+      Object.keys(state.data?.flags || {}).length === 0 &&
+      (state.data?.collectedHotspots || []).length === 0;
+
+    if (!isBeginning) {
+      const confirmed = window.confirm('진행 데이터를 처음 상태로 되돌리고 제1화 도입부부터 새로 시작하시겠습니까?');
+      if (!confirmed) return;
+    }
 
     state.reset();
     this.engine.showToast('새로운 모험이 시작됩니다!', 'success', '✨');

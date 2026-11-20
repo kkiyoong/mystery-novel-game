@@ -108,17 +108,17 @@
         <!-- Progress Card -->
         <div class="home-progress-card">
           <div class="progress-card-header">
-            <span class="progress-card-tag">📍 최근 진행 위치</span>
-            <span id="home-progress-badge" class="progress-badge">진행 중</span>
+            <span class="progress-card-tag" id="home-progress-tag">📖 제1화 도입부</span>
+            <span id="home-progress-badge" class="progress-badge is-start">시작 대기</span>
           </div>
           <div class="progress-card-body">
             <div class="progress-location-box">
-              <span class="location-chip">현위치</span>
-              <strong id="home-progress-location" class="location-name">기숙사 앞 복도 (새로운 룸메이트)</strong>
+              <span class="location-chip" id="home-progress-chip">시작 위치</span>
+              <strong id="home-progress-location" class="location-name">본관 복도 (새로운 룸메이트)</strong>
             </div>
             <div class="progress-summary-box">
-              <span class="summary-label">최근 사건 요약</span>
-              <p id="home-progress-summary" class="summary-text">칼릭스와의 만남과 같은 방 배정 확인 후 약초학 강의실로 이동</p>
+              <span class="summary-label" id="home-progress-summary-label">도입부 안내</span>
+              <p id="home-progress-summary" class="summary-text">노바리스 아카데미 입학식이 끝나고 기숙사로 향하는 길, 뜻밖의 룸메이트를 마주하게 됩니다.</p>
             </div>
           </div>
         </div>
@@ -128,16 +128,16 @@
           <button type="button" id="btn-home-continue" class="home-btn btn-continue">
             <span class="btn-icon">▶</span>
             <span class="btn-text-wrap">
-              <span class="btn-title">이어하기</span>
-              <span class="btn-subtext" id="home-continue-subtext">마지막 진행 장면에서 계속</span>
+              <span class="btn-title" id="home-continue-title">이야기 시작하기</span>
+              <span class="btn-subtext" id="home-continue-subtext">제1화 도입부부터 읽기</span>
             </span>
           </button>
 
-          <button type="button" id="btn-home-new-game" class="home-btn btn-new-game">
-            <span class="btn-icon">✨</span>
+          <button type="button" id="btn-home-new-game" class="home-btn btn-new-game" style="display: none;">
+            <span class="btn-icon">🔄</span>
             <span class="btn-text-wrap">
-              <span class="btn-title">새로 시작하기</span>
-              <span class="btn-subtext">제1화 도입부부터 다시 시작</span>
+              <span class="btn-title">처음부터 다시하기</span>
+              <span class="btn-subtext">제1화 도입부부터 새로 시작</span>
             </span>
           </button>
 

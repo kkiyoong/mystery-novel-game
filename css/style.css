@@ -5062,6 +5062,12 @@ body.theme-sepia .honeycomb-empty-icon {
   color: var(--accent-primary);
 }
 
+.progress-badge.is-start {
+  background: rgba(46, 125, 50, 0.15);
+  color: #2e7d32;
+  border: 1px solid rgba(46, 125, 50, 0.3);
+}
+
 .progress-card-body {
   display: flex;
   flex-direction: column;
