@@ -1,5 +1,5 @@
-import { state } from './state.js?v=20261121_0715';
-import { CODEX_DATA } from './data/codexData.js?v=20261121_0715';
+import { state } from './state.js?v=20261121_0745';
+import { CODEX_DATA } from './data/codexData.js?v=20261121_0745';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -1515,11 +1515,23 @@ export class MemoBoard {
 
     } else {
       // ===== [일반 모드(전체 탭, 주제 탭 등)] =====
-      // 중분류 단서 타일(subClues)은 절대 표시하지 않으며, 세부 타일(subItems)만 표시됨!
+      // 중분류 단서 타일(subClues)과 세부 타일(subItems) 표시
       if (this.expandedId) {
         const parent = this.clues.find((c) => c.id === this.expandedId);
         if (parent) {
-          const allSubs = parent.subItems || [];
+          const unlockedClues = (parent.subClues || []).map((sc) => ({
+            ...sc,
+            role: 'clue',
+            isMidClue: true,
+            sub: '단서'
+          }));
+          const unlockedItems = (parent.subItems || []).map((si) => ({
+            ...si,
+            role: 'sub',
+            isSubItem: true,
+            sub: '세부 타일'
+          }));
+          const allSubs = [...unlockedClues, ...unlockedItems];
           const occupiedKeys = new Set(
             this.clues.filter((c) => c.id !== parent.id).map((c) => `${c.q},${c.r}`)
           );

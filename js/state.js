@@ -392,7 +392,8 @@ class GameState {
     if (!conditionId) return false;
     this.data.flags ||= {};
     this.data.flags[`clue_cond_${conditionId}`] = true;
-    this.unlockCodex(conditionId);
+    this.data.flags[conditionId] = true;
+    this.save();
     this.emit('clueConditionUnlocked', conditionId);
     this.emit('change', this.data);
     return true;

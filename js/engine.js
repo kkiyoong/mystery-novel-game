@@ -2,10 +2,10 @@
  * Narrative Branching Engine & Layton-Style Investigation Controller
  */
 
-import { state } from './state.js?v=20261121_0715';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0715';
-import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_0715';
-import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_0715';
+import { state } from './state.js?v=20261121_0745';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0745';
+import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_0745';
+import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_0745';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;',
@@ -301,9 +301,11 @@ export class GameEngine {
       const choiceKey = choice.id || `choice_${node.id}_${index}`;
       const isChosen = Boolean(
         state.getFlag(`chosen_${choiceKey}`) ||
-        state.getFlag(`chosen_text_${node.id}_${choice.text.trim()}`)
+        state.getFlag(`chosen_text_${node.id}_${choice.text.trim()}`) ||
+        state.getFlag(`chosen_global_${choice.text.trim()}`) ||
+        (choice.nextNode && state.getFlag(`visited_target_${choice.nextNode}`))
       );
-      const shouldHide = isChosen && (choice.hideIfChosen !== false);
+      const shouldHide = isChosen && (choice.hideIfChosen === true);
       return { choice, index, isChosen, shouldHide };
     });
 
@@ -1414,10 +1416,17 @@ export class GameEngine {
       if (isNew) {
         state.setFlag(eventKey, true);
         state.unlockClueCondition(clueId);
+        if (clueLabel && clueLabel !== clueId) {
+          state.unlockClueCondition(clueLabel);
+        }
+        if (matchedClue?.id && matchedClue.id !== clueId) {
+          state.unlockClueCondition(matchedClue.id);
+        }
         if (matchedParent) {
           state.unlockCodex(matchedParent.id);
         }
         this.playAudio('codexUnlock');
+        this.showToast(`[${clueLabel}] 단서 조건을 수첩에 등록했습니다!`, 'info', '🔘');
       }
 
       return `
@@ -1901,6 +1910,10 @@ export class GameEngine {
     state.setFlag(`chosen_${choiceKey}`, true);
     if (choice.text) {
       state.setFlag(`chosen_text_${node.id}_${choice.text.trim()}`, true);
+      state.setFlag(`chosen_global_${choice.text.trim()}`, true);
+    }
+    if (choice.nextNode) {
+      state.setFlag(`visited_target_${choice.nextNode}`, true);
     }
 
     this.playAudio('click');

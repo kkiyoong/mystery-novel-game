@@ -2,16 +2,16 @@
  * Main Application Controller
  */
 
-import { state } from './state.js?v=20261121_0715';
-import { GameEngine } from './engine.js?v=20261121_0715';
-import { RotaryWheel } from './wheel.js?v=20261121_0715';
-import { HexBoard } from './hexBoard.js?v=20261121_0715';
-import { MemoBoard } from './memoBoard.js?v=20261121_0715';
-import { IsometricMap } from './isometricMap.js?v=20261121_0715';
-import { CODEX_CATEGORIES, CODEX_DATA, CLUE_RECIPES } from './data/codexData.js?v=20261121_0715';
-import { MAP_LOCATIONS, INVESTIGATION_SCENES } from './data/mapData.js?v=20261121_0715';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0715';
-import { AuthorEditor, applySavedAuthorData } from './authorEditor.js?v=20261121_0715';
+import { state } from './state.js?v=20261121_0745';
+import { GameEngine } from './engine.js?v=20261121_0745';
+import { RotaryWheel } from './wheel.js?v=20261121_0745';
+import { HexBoard } from './hexBoard.js?v=20261121_0745';
+import { MemoBoard } from './memoBoard.js?v=20261121_0745';
+import { IsometricMap } from './isometricMap.js?v=20261121_0745';
+import { CODEX_CATEGORIES, CODEX_DATA, CLUE_RECIPES } from './data/codexData.js?v=20261121_0745';
+import { MAP_LOCATIONS, INVESTIGATION_SCENES } from './data/mapData.js?v=20261121_0745';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0745';
+import { AuthorEditor, applySavedAuthorData } from './authorEditor.js?v=20261121_0745';
 
 const AUTHOR_DATA_LOAD_RESULT = applySavedAuthorData();
 window.state = state;
@@ -779,7 +779,7 @@ class App {
         state.setMode('story');
         state.setCurrentNode(targetNode);
         this.engine.renderStoryNode(targetNode);
-        this.engine.showToast('탐사 허브로 복귀했습니다.', 'info', '📋');
+        this.engine.showToast('어떻게 할까? 장면으로 이동했습니다.', 'info', '💭');
       });
     }
 
@@ -1015,6 +1015,13 @@ class App {
         // Filter out legacy dummy template IDs or invalid entries
         if (id === 'ep_01' || id === 'char_aren' || id === 'item_inquisitor_badge' || id === 'magic_resonance') return;
         if (id.startsWith('ep_') || id.startsWith('item_')) return;
+        // Never convert sub-clues (단서 조건) or sub-items (세부타일) into top-level 대분류 topics!
+        if (id.startsWith('sc_') || id.startsWith('sub_') || id.startsWith('clue_cond_') || id.includes('_sc_') || id.includes('_keyword_')) return;
+        const isChildItem = CODEX_DATA.some((c) =>
+          (c.subClues || []).some((sc) => sc.id === id || sc.label === id) ||
+          (c.subItems || []).some((si) => si.id === id || si.label === id)
+        );
+        if (isChildItem) return;
 
         let cat = codexItem.category;
         if (!cat) {
@@ -1130,7 +1137,7 @@ class App {
           isNew: Boolean(state.getUnlockedCodex()[relatedEntry.id]?.isNew && !board.readNewIds.has(relatedEntry.id))
         }));
       const unlockedSubClues = (entry.subClues || []).filter((sc) => {
-        return sc.unlockedByDefault !== false || state.isClueConditionUnlocked(sc.id);
+        return sc.unlockedByDefault !== false || state.isClueConditionUnlocked(sc.id) || state.isClueConditionUnlocked(sc.label);
       }).map((sc) => ({
         ...sc,
         isNew: Boolean(state.getUnlockedCodex()[sc.id]?.isNew && !board.readNewIds.has(sc.id))
@@ -1689,6 +1696,51 @@ class App {
 
     const newPillHtml = wasNew ? `<span class="detail-new-pill">✨ 새로 등록된 정보</span>` : '';
 
+    let subCluesSectionHtml = '';
+    if (Array.isArray(entry.subClues) && entry.subClues.length > 0) {
+      const itemsHtml = entry.subClues.map((sc) => {
+        const isUnlocked = sc.unlockedByDefault !== false || state.isClueConditionUnlocked(sc.id) || state.isClueConditionUnlocked(sc.label);
+        if (isUnlocked) {
+          return `
+            <div style="padding: 8px 10px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 6px; margin-bottom: 6px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <strong style="color: #b45309; font-size: 13px;">🔘 ${escapeHtml(sc.label || '단서')}</strong>
+                <span style="font-size: 11px; font-weight: 700; color: #16a34a;">해금 완료</span>
+              </div>
+              <p style="margin: 3px 0 0 0; font-size: 12px; color: var(--text-main); line-height: 1.4;">${escapeHtml(sc.desc || '')}</p>
+            </div>
+          `;
+        } else {
+          return `
+            <div style="padding: 8px 10px; background: rgba(0,0,0,0.03); border: 1px dashed rgba(0,0,0,0.2); border-radius: 6px; margin-bottom: 6px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="color: var(--text-muted); font-size: 13px; font-weight: 600;">🔒 미확인 단서</span>
+                <span style="font-size: 11px; color: var(--text-muted);">현장 조사 필요</span>
+              </div>
+              <p style="margin: 3px 0 0 0; font-size: 11.5px; color: var(--text-muted);">아카데미 현장 조사나 인물 대화를 통해 발견할 수 있습니다.</p>
+            </div>
+          `;
+        }
+      }).join('');
+
+      const unlockedCount = entry.subClues.filter((sc) => sc.unlockedByDefault !== false || state.isClueConditionUnlocked(sc.id) || state.isClueConditionUnlocked(sc.label)).length;
+
+      subCluesSectionHtml = `
+        <div class="detail-clues-section" style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-color, #cbd5e1);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <h4 style="font-size: 13px; font-weight: 700; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 6px;">
+              <span>🔘 수집된 단서 조건</span>
+              <span style="font-size: 11px; padding: 2px 7px; background: rgba(0,0,0,0.1); border-radius: 4px; font-weight: 700;">${unlockedCount}/${entry.subClues.length}</span>
+            </h4>
+            <button type="button" class="btn-focus-mode" style="padding: 4px 10px; font-size: 11.5px; font-weight: 700; background: var(--accent-gold, #f59e0b); color: #000; border: none; border-radius: 4px; cursor: pointer;">💡 추론 모드</button>
+          </div>
+          <div class="detail-subclues-list">
+            ${itemsHtml}
+          </div>
+        </div>
+      `;
+    }
+
     detailContainer.innerHTML = `
       <div class="codex-detail-content">
         <header class="detail-header">
@@ -1705,12 +1757,20 @@ class App {
           <div class="detail-description">
             <p>${escapeHtml(entry.description)}</p>
           </div>
+          ${subCluesSectionHtml}
         </div>
         <footer class="detail-footer">
           <span class="detail-status-pill">✓ 수사 수첩 기록 완료</span>
         </footer>
       </div>
     `;
+
+    const focusBtn = detailContainer.querySelector('.btn-focus-mode');
+    if (focusBtn && this.memoBoard) {
+      focusBtn.addEventListener('click', () => {
+        this.memoBoard.enterFocusMode(entry.id);
+      });
+    }
   }
 
   renderMapLocations() {

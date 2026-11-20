@@ -426,15 +426,23 @@ export const STORY_NODES = {
     "choices": [
       {
         "text": "이 퀴즈 말인데요. ‘눈을 감으면 더 드러난다’는 건 무슨 뜻이죠?",
+        "hideIfChosen": true,
         "nextNode": "story_1795180361145"
       },
       {
         "text": "반딧불이 물약이 뭐예요?",
+        "hideIfChosen": true,
         "nextNode": "story_1795185391071"
       },
       {
         "text": "학교 식당에서 제일 맛있는 메뉴는 뭐예요?",
+        "hideIfChosen": true,
         "nextNode": "story_1795180742741"
+      },
+      {
+        "text": "인사를 하고 자리를 떠난다.",
+        "desc": "선배에게 감사 인사를 건네고 발걸음을 옮긴다.",
+        "nextNode": "story_1795192473432"
       }
     ]
   },
@@ -449,7 +457,7 @@ export const STORY_NODES = {
       "[타이핑: 이 퀴즈 말인데요. ‘눈을 감으면 더 드러난다’는 건 무슨 뜻이죠?]",
       "[타이핑: 뭐겠어. 잔상이 남을 만큼 반짝거린다는 거지.]",
       "[단서: 반짝임| 약초 퀴즈 | 반짝이는 식물이라는 걸 알아냈다.]",
-      "다른 질문을  하거나 인사를 하고 떠나자."
+      "다른 질문을 하거나 인사를 하고 떠나자."
     ],
     "choices": [
       {
@@ -463,6 +471,11 @@ export const STORY_NODES = {
         "desc": "",
         "hideIfChosen": true,
         "nextNode": "story_1795180742741"
+      },
+      {
+        "text": "인사를 하고 자리를 떠난다.",
+        "desc": "선배에게 감사 인사를 건네고 발걸음을 옮긴다.",
+        "nextNode": "story_1795192473432"
       }
     ]
   },
@@ -490,6 +503,11 @@ export const STORY_NODES = {
         "desc": "",
         "hideIfChosen": true,
         "nextNode": "story_1795185391071"
+      },
+      {
+        "text": "인사를 하고 자리를 떠난다.",
+        "desc": "선배에게 감사 인사를 건네고 발걸음을 옮긴다.",
+        "nextNode": "story_1795192473432"
       }
     ]
   },
@@ -530,16 +548,21 @@ export const STORY_NODES = {
             "knowledge": 1
           }
         }
+      },
+      {
+        "text": "인사를 하고 자리를 떠난다.",
+        "desc": "선배에게 감사 인사를 건네고 발걸음을 옮긴다.",
+        "nextNode": "story_1795192473432"
       }
     ]
   },
   "story_1795192473432": {
     "id": "story_1795192473432",
     "episodeId": "ep1",
-    "title": "어디로 가지?",
+    "title": "어떻게 할까?",
     "chapter": "탐사 허브",
-    "locationName": "어디로 가지?",
-    "summary": "이 장면의 최근 사건 요약을 입력하세요.",
+    "locationName": "어떻게 할까?",
+    "summary": "이제 어디로 가서 단서를 수집할지 결정하자.",
     "paragraphs": [
       "[타이핑: 이제 어떻게 할까?]",
       "[브리핑카드: story_1795161633215 | 약초 퀴즈]"
