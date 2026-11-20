@@ -2,10 +2,10 @@
  * Narrative Branching Engine & Layton-Style Investigation Controller
  */
 
-import { state } from './state.js';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js';
-import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js';
-import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js';
+import { state } from './state.js?v=20261121_0715';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0715';
+import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_0715';
+import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_0715';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;',

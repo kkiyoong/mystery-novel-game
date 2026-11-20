@@ -1,14 +1,15 @@
-import { state } from './state.js';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js';
-import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js';
+import { state } from './state.js?v=20261121_0715';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0715';
+import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_0715';
 import {
   CODEX_CATEGORIES,
   CODEX_DATA,
   CLUE_RECIPES,
   INVENTORY_ITEMS
-} from './data/codexData.js';
-import { MAP_TILES } from './isometricMap.js';
+} from './data/codexData.js?v=20261121_0715';
+import { MAP_TILES } from './isometricMap.js?v=20261121_0715';
 
+export const CODE_BUILD_ID = '20261121_0715';
 const STORAGE_KEY = 'mystery_novel_author_data_v1';
 const STAT_FIELDS = [
   { id: 'magic', label: '마법' },
@@ -79,6 +80,8 @@ function dataSnapshot() {
   ensureMainBuildingData();
   return {
     version: 1,
+    buildId: CODE_BUILD_ID,
+    savedAt: new Date().toISOString(),
     storyEpisodes: clone(STORY_EPISODES),
     storyNodes: clone(STORY_NODES),
     mapLocations: clone(MAP_LOCATIONS),
@@ -298,12 +301,24 @@ function applyData(data) {
 
 export function applySavedAuthorData() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (!saved) {
+    const savedRaw = localStorage.getItem(STORAGE_KEY);
+    if (!savedRaw) {
       ensureMainBuildingData();
       return { error: null };
     }
-    applyData(JSON.parse(saved));
+    const parsed = JSON.parse(savedRaw);
+    // If the saved draft has no build ID or is from an older build than deployed code,
+    // do not let the obsolete local snapshot overwrite the latest published codebase!
+    if (!parsed.buildId || parsed.buildId < CODE_BUILD_ID) {
+      console.warn(`[AuthorEditor] 로컬 저장 데이터(${parsed.buildId || 'legacy'})가 최신 배포 버전(${CODE_BUILD_ID})보다 이전입니다. 최신 코드 데이터를 우선 적용합니다.`);
+      try {
+        localStorage.setItem(`${STORAGE_KEY}_backup_${parsed.buildId || 'legacy'}`, savedRaw);
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {}
+      ensureMainBuildingData();
+      return { error: null, upgraded: true };
+    }
+    applyData(parsed);
     return { error: null };
   } catch (error) {
     console.error('저장된 편집 데이터를 불러오지 못했습니다.', error);
