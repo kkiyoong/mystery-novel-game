@@ -5,6 +5,15 @@ const ISO_Y = 0.56;
 const DEPTH = 15;
 const MAP_OFFSET_Y = 35;
 
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export const MAP_TILES = [
   {
     "key": "dormitory",
@@ -17,12 +26,13 @@ export const MAP_TILES = [
   },
   {
     "key": "archive-tower",
-    "name": "기록탑",
+    "name": "도서관",
     "q": 0,
     "r": -1,
     "building": "tower",
     "description": "아카데미의 오래된 기록을 보관하는 탑입니다.",
-    "visualOnly": true
+    "locationId": "loc_library",
+    "alwaysVisible": true
   },
   {
     "key": "academic-wing",
@@ -44,11 +54,12 @@ export const MAP_TILES = [
   },
   {
     "key": "main-building",
-    "locationId": "loc_library",
+    "locationId": "loc_main",
     "name": "본관",
     "q": 0,
     "r": 0,
-    "building": "main"
+    "building": "main",
+    "alwaysVisible": true
   },
   {
     "key": "annex",
@@ -77,10 +88,12 @@ export const MAP_TILES = [
   },
   {
     "key": "north-expansion",
-    "name": "북쪽 빈 터",
+    "name": "새 장소",
     "q": 1,
     "r": -2,
-    "description": "아카데미 북쪽에 남아 있는 빈 터입니다."
+    "description": "아카데미 북쪽에 남아 있는 빈 터입니다.",
+    "locationId": "loc_custom_1795174793503",
+    "building": "annex"
   },
   {
     "key": "west-expansion",
@@ -312,13 +325,39 @@ function drawBuilding(parent, type) {
 }
 
 export class IsometricMap {
-  constructor({ layerEl, isLocationUnlocked, onTravelToLocation, onSetCurrentTile }) {
+  constructor({ layerEl, isLocationUnlocked, onTravelToLocation, onCannotTravel, onSetCurrentTile }) {
     this.layer = layerEl;
     this.isLocationUnlocked = isLocationUnlocked;
     this.onTravelToLocation = onTravelToLocation;
+    this.onCannotTravel = onCannotTravel;
     this.onSetCurrentTile = onSetCurrentTile;
     this.selectedKey = null;
     this.tilesByKey = new Map();
+
+    const descBox = document.getElementById('academy-map-description');
+    if (descBox && !descBox.dataset.boundClick) {
+      descBox.dataset.boundClick = 'true';
+      descBox.addEventListener('click', (e) => {
+        if (e.target.closest('.academy-map-action-btn')) return;
+        const selectedTile = this.tilesByKey.get(this.selectedKey);
+        if (selectedTile?.canTravel && !selectedTile.isCurrent) {
+          this.onTravelToLocation(selectedTile.location);
+        } else if (selectedTile) {
+          this.onCannotTravel?.(selectedTile);
+        }
+      });
+      descBox.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const selectedTile = this.tilesByKey.get(this.selectedKey);
+          if (selectedTile?.canTravel && !selectedTile.isCurrent) {
+            this.onTravelToLocation(selectedTile.location);
+          } else if (selectedTile) {
+            this.onCannotTravel?.(selectedTile);
+          }
+        }
+      });
+    }
   }
 
   render(locations, currentLocationId, currentMapTileKey = null) {
@@ -344,7 +383,7 @@ export class IsometricMap {
         canTravel: locationUnlocked,
         isCurrent,
         name: isEmpty ? '?' : (location?.name || tile.name),
-        displayName: `${isEmpty ? '?' : (location?.name || tile.name)}${isCurrent ? ' (현위치)' : ''}`,
+        displayName: isEmpty ? '?' : (location?.name || tile.name),
         description: isEmpty ? '미해금 지역' : (location ? location.description : tile.description),
         building: location?.building || tile.building,
         image: location?.image || tile.image,
@@ -409,15 +448,23 @@ export class IsometricMap {
       this.restoreSelectedTile();
     });
     tileGroup.addEventListener('click', () => {
-      this.selectedKey = tile.key;
-      this.setActiveTile(tile);
+      if (this.selectedKey === tile.key) {
+        if (tile.canTravel && !tile.isCurrent) {
+          this.onTravelToLocation(tile.location);
+        } else {
+          this.onCannotTravel?.(tile);
+        }
+      } else {
+        this.selectedKey = tile.key;
+        this.setActiveTile(tile);
+      }
     });
     tileGroup.addEventListener('dblclick', (event) => {
       event.preventDefault();
-      if (tile.canTravel) {
+      if (tile.canTravel && !tile.isCurrent) {
         this.onTravelToLocation(tile.location);
-      } else if (tile.isEmpty) {
-        this.setCurrentTile(tile);
+      } else {
+        this.onCannotTravel?.(tile);
       }
     });
     tileGroup.addEventListener('keydown', (event) => {
@@ -426,10 +473,10 @@ export class IsometricMap {
         this.selectedKey = tile.key;
         this.setActiveTile(tile);
         if (event.key === 'Enter') {
-          if (tile.canTravel) {
+          if (tile.canTravel && !tile.isCurrent) {
             this.onTravelToLocation(tile.location);
-          } else if (tile.isEmpty) {
-            this.setCurrentTile(tile);
+          } else {
+            this.onCannotTravel?.(tile);
           }
         }
       }
@@ -471,14 +518,58 @@ export class IsometricMap {
 
   showDescription(tile) {
     if (tile) {
-      this.updateDescription(tile.displayName, tile.description);
+      this.updateDescription(tile);
     }
   }
 
-  updateDescription(title, description) {
+  updateDescription(tile) {
     const titleEl = document.getElementById('academy-map-location-title');
     const descriptionEl = document.getElementById('academy-map-location-description');
-    if (titleEl) titleEl.textContent = title || '';
-    if (descriptionEl) descriptionEl.textContent = description || '';
+    const descBox = document.getElementById('academy-map-description');
+
+    if (titleEl) titleEl.textContent = tile.displayName || '';
+    if (descriptionEl) descriptionEl.textContent = tile.description || '';
+
+    if (descBox) {
+      const actionWrap = descBox.querySelector('.academy-map-action-wrap');
+      if (tile.canTravel && !tile.isCurrent) {
+        descBox.classList.add('can-travel');
+        descBox.classList.remove('is-locked', 'is-current');
+
+        if (actionWrap) {
+          actionWrap.innerHTML = `
+            <button type="button" class="academy-map-action-btn is-primary" data-map-action="travel" title="${escapeHtml(tile.displayName || '장소')}(으)로 이동">
+              <span>이동하기</span>
+              <span class="academy-map-arrow" aria-hidden="true">→</span>
+            </button>
+          `;
+
+          const travelBtn = actionWrap.querySelector('.academy-map-action-btn');
+          if (travelBtn) {
+            travelBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this.onTravelToLocation(tile.location);
+            });
+          }
+        }
+      } else if (tile.isCurrent) {
+        descBox.classList.add('is-current');
+        descBox.classList.remove('can-travel', 'is-locked');
+        if (actionWrap) {
+          actionWrap.innerHTML = `<span class="academy-map-status-chip is-current">📍 현재 위치</span>`;
+        }
+      } else if (tile.isEmpty) {
+        descBox.classList.add('is-locked');
+        descBox.classList.remove('can-travel', 'is-current');
+        if (actionWrap) {
+          actionWrap.innerHTML = `<span class="academy-map-status-chip is-locked">🔒 미해금</span>`;
+        }
+      } else {
+        descBox.classList.remove('can-travel', 'is-locked', 'is-current');
+        if (actionWrap) {
+          actionWrap.innerHTML = '';
+        }
+      }
+    }
   }
 }

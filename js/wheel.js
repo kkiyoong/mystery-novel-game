@@ -7,7 +7,7 @@ import { state } from './state.js';
 export const POCKET_ITEMS = [
   { id: 'codex', label: '메모', icon: '📖', subtitle: '단서 및 인물 도감' },
   { id: 'map', label: '지도', icon: '🗺️', subtitle: '아카데미 전도 & 이동' },
-  { id: 'inventory', label: '소지품', icon: '🎒', subtitle: '보관함 & 획득물' },
+  { id: 'inventory', label: '인벤토리', icon: '🎒', subtitle: '아이템' },
   { id: 'stats', label: '스탯', icon: '📊', subtitle: '능력치 & 상태' }
 ];
 

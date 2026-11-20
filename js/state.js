@@ -7,43 +7,41 @@ const STORAGE_KEY = 'mystery_novel_game_state_v1';
 const DEFAULT_STATE = {
   currentNodeId: 'ep1_pocket_intro',
   currentEpisodeId: 'ep1',
-  mode: 'story', // 'story' | 'investigation'
+  mode: 'home', // 'home' | 'story' | 'investigation'
+  lastActiveMode: 'story',
+  lastActiveNodeId: 'ep1_pocket_intro',
+  lastActiveLocationId: 'loc_library',
   currentLocationId: 'loc_library',
   currentMapTileKey: null,
   hasPocket: false,
   hasOpenedPocket: false,
   player: {
-    name: '아렌',
-    title: '견습 수사관',
+    name: '레이든 브루크',
+    title: '아카데미 신입생',
     stats: {
+      magic: 4,      // 마법
+      knowledge: 4,  // 지식
       perception: 4, // 관찰력
-      magic: 3,      // 마력
-      persuasion: 4, // 화술
+      social: 4,     // 사교력
       stamina: 85    // 체력
     },
     traits: [
-      { name: '예리한 직감', desc: '사소한 불일치와 미세한 흔적을 감지하는 관찰 감각' },
-      { name: '규율단 수사관', desc: '총장실 직속 공식 조사 및 심문 권한' }
+      { name: '정확한 계량', desc: '빵집 아들의 필수 스킬' },
     ]
   },
   inventory: [
     {
       id: 'item_inquisitor_badge',
-      name: '수사관 배지',
-      icon: '🛡️',
+      name: '손전등',
+      icon: '🔦',
       quantity: 1,
       type: 'key',
-      desc: '아카데미 총장실 직속 규율단원임을 증명하는 은제 배지.'
+      desc: '빛이 나오는 막대.'
     }
   ],
-  unlockedCodex: {
-    ep_01: { unlocked: true, isNew: false, unlockedAt: Date.now() },
-    char_aren: { unlocked: true, isNew: false, unlockedAt: Date.now() },
-    item_inquisitor_badge: { unlocked: true, isNew: false, unlockedAt: Date.now() },
-    magic_resonance: { unlocked: true, isNew: false, unlockedAt: Date.now() }
-  },
+  unlockedCodex: {},
   unlockedTileRecords: {},
-  discoveredLocations: ['loc_library'],
+  discoveredLocations: ['loc_library', 'loc_main'],
   flags: {},
   collectedHotspots: [],
   readerSettings: {
@@ -72,9 +70,16 @@ class GameState {
         const hasPocket = Object.prototype.hasOwnProperty.call(parsed, 'hasPocket')
           ? Boolean(parsed.hasPocket)
           : Boolean(parsed.currentNodeId && parsed.currentNodeId !== 'ep1_pocket_intro');
+        const lastActiveMode = parsed.lastActiveMode || (parsed.mode === 'investigation' ? 'investigation' : 'story');
+        const lastActiveNodeId = parsed.lastActiveNodeId || parsed.currentNodeId || DEFAULT_STATE.lastActiveNodeId;
+        const lastActiveLocationId = parsed.lastActiveLocationId || parsed.currentLocationId || DEFAULT_STATE.lastActiveLocationId;
         return {
           ...DEFAULT_STATE,
           ...parsed,
+          mode: 'home',
+          lastActiveMode,
+          lastActiveNodeId,
+          lastActiveLocationId,
           hasPocket,
           hasOpenedPocket: Object.prototype.hasOwnProperty.call(parsed, 'hasOpenedPocket')
             ? Boolean(parsed.hasOpenedPocket)
@@ -91,10 +96,17 @@ class GameState {
             ...DEFAULT_STATE.readerSettings,
             ...(parsed.readerSettings || {})
           },
-          unlockedCodex: {
-            ...DEFAULT_STATE.unlockedCodex,
-            ...(parsed.unlockedCodex || {})
-          },
+          unlockedCodex: (() => {
+            const raw = {
+              ...DEFAULT_STATE.unlockedCodex,
+              ...(parsed.unlockedCodex || {})
+            };
+            delete raw.ep_01;
+            delete raw.char_aren;
+            delete raw.item_inquisitor_badge;
+            delete raw.magic_resonance;
+            return raw;
+          })(),
           unlockedTileRecords: {
             ...DEFAULT_STATE.unlockedTileRecords,
             ...(parsed.unlockedTileRecords || {})
@@ -152,8 +164,22 @@ class GameState {
     return this.data.currentNodeId;
   }
 
+  getHistory() {
+    return this.data.history || [];
+  }
+
+  hasVisitedNode(nodeId) {
+    return (this.data.history || []).includes(nodeId);
+  }
+
+  isLocationDiscovered(locId) {
+    return (this.data.discoveredLocations || []).includes(locId);
+  }
+
   setCurrentNode(nodeId) {
     this.data.currentNodeId = nodeId;
+    this.data.lastActiveNodeId = nodeId;
+    this.data.lastActiveMode = 'story';
     if (!this.data.history.includes(nodeId)) {
       this.data.history.push(nodeId);
     }
@@ -167,6 +193,12 @@ class GameState {
   }
 
   setMode(mode, locationId = null) {
+    if (mode !== 'home') {
+      this.data.lastActiveMode = mode;
+      if (locationId) {
+        this.data.lastActiveLocationId = locationId;
+      }
+    }
     this.data.mode = mode;
     if (locationId) {
       this.data.currentLocationId = locationId;
@@ -175,6 +207,29 @@ class GameState {
     this.save();
     this.emit('modeChanged', { mode, locationId: this.data.currentLocationId });
     this.emit('change', this.data);
+  }
+
+  getLastActiveMode() {
+    return this.data.lastActiveMode || 'story';
+  }
+
+  getLastActiveNodeId() {
+    return this.data.lastActiveNodeId || this.data.currentNodeId || DEFAULT_STATE.lastActiveNodeId;
+  }
+
+  getLastActiveLocationId() {
+    return this.data.lastActiveLocationId || this.data.currentLocationId || DEFAULT_STATE.lastActiveLocationId;
+  }
+
+  setLastActive(mode, id) {
+    if (mode === 'investigation') {
+      this.data.lastActiveMode = 'investigation';
+      if (id) this.data.lastActiveLocationId = id;
+    } else {
+      this.data.lastActiveMode = 'story';
+      if (id) this.data.lastActiveNodeId = id;
+    }
+    this.save();
   }
 
   getCurrentLocationId() {
@@ -329,17 +384,24 @@ class GameState {
     return true;
   }
 
-  unlockCodex(codexId) {
-    if (!this.data.unlockedCodex[codexId]) {
+  unlockCodex(codexId, meta = {}) {
+    if (!codexId) return false;
+    this.data.unlockedCodex ||= {};
+    const existing = this.data.unlockedCodex[codexId];
+    if (!existing) {
       this.data.unlockedCodex[codexId] = {
         unlocked: true,
         isNew: true,
-        unlockedAt: Date.now()
+        unlockedAt: Date.now(),
+        ...meta
       };
       this.save();
       this.emit('codexUnlocked', codexId);
       this.emit('change', this.data);
       return true;
+    } else if (meta && Object.keys(meta).length > 0) {
+      Object.assign(existing, meta);
+      this.save();
     }
     return false;
   }
@@ -347,15 +409,62 @@ class GameState {
   markCodexRead(codexId) {
     if (!codexId) return;
     let changed = false;
-    if (this.data.unlockedCodex[codexId] && this.data.unlockedCodex[codexId].isNew) {
+    this.data.unlockedCodex ||= {};
+
+    if (this.data.unlockedCodex[codexId]?.isNew) {
       this.data.unlockedCodex[codexId].isNew = false;
       changed = true;
       this.emit('codexRead', codexId);
     }
+
+    // Aliases
+    if (codexId === 'clue_herb_quiz' && this.data.unlockedCodex['clue_퀴즈?']?.isNew) {
+      this.data.unlockedCodex['clue_퀴즈?'].isNew = false;
+      changed = true;
+    } else if (codexId === 'clue_퀴즈?' && this.data.unlockedCodex['clue_herb_quiz']?.isNew) {
+      this.data.unlockedCodex['clue_herb_quiz'].isNew = false;
+      changed = true;
+    }
+
+    // Prefix / Suffix match
+    Object.entries(this.data.unlockedCodex).forEach(([key, val]) => {
+      if (val && val.isNew) {
+        if (key.endsWith(`_${codexId}`) || codexId.endsWith(`_${key}`)) {
+          val.isNew = false;
+          changed = true;
+        }
+      }
+    });
+
     if (this.data.unlockedTileRecords) {
       Object.entries(this.data.unlockedTileRecords).forEach(([recId, rec]) => {
         if ((recId === codexId || rec.tileId === codexId) && rec.isNew) {
           rec.isNew = false;
+          changed = true;
+        }
+      });
+    }
+
+    if (changed) {
+      this.save();
+      this.emit('change', this.data);
+    }
+  }
+
+  markAllCodexRead() {
+    let changed = false;
+    if (this.data.unlockedCodex) {
+      Object.values(this.data.unlockedCodex).forEach((c) => {
+        if (c && c.isNew) {
+          c.isNew = false;
+          changed = true;
+        }
+      });
+    }
+    if (this.data.unlockedTileRecords) {
+      Object.values(this.data.unlockedTileRecords).forEach((r) => {
+        if (r && r.isNew) {
+          r.isNew = false;
           changed = true;
         }
       });
@@ -393,6 +502,39 @@ class GameState {
     }
   }
 
+  getUnreadCountByCategory(codexList = []) {
+    const counts = { all: 0, clue: 0, character: 0, magic: 0, incident: 0 };
+    const unlockedCodex = this.data.unlockedCodex || {};
+
+    Object.entries(unlockedCodex).forEach(([id, item]) => {
+      if (item && item.unlocked && item.isNew) {
+        counts.all++;
+        const entry = codexList.find((c) => c.id === id || c.title === id);
+        let cat = entry?.category || item.category;
+        if (!cat) {
+          if (id.startsWith('char_')) cat = 'character';
+          else if (id.startsWith('magic_')) cat = 'magic';
+          else cat = 'clue';
+        }
+        if (counts[cat] !== undefined) {
+          counts[cat]++;
+        } else {
+          counts.clue++;
+        }
+      }
+    });
+
+    const unlockedRecords = this.data.unlockedTileRecords || {};
+    Object.values(unlockedRecords).forEach((rec) => {
+      if (rec && rec.unlocked && rec.isNew) {
+        counts.all++;
+        counts.clue++;
+      }
+    });
+
+    return counts;
+  }
+
   getUnreadCodexCount() {
     const unreadCodex = Object.values(this.data.unlockedCodex || {}).filter(c => c.unlocked && c.isNew).length;
     const unreadRecords = Object.values(this.data.unlockedTileRecords || {}).filter(r => r.unlocked && r.isNew).length;
@@ -406,6 +548,7 @@ class GameState {
   }
 
   setFlag(flagName, value = true) {
+    if (this.data.flags[flagName] === value) return;
     this.data.flags[flagName] = value;
     this.save();
     this.emit('flagChanged', { flagName, value });
@@ -438,17 +581,37 @@ class GameState {
   }
 
   getPlayer() {
-    return this.data.player;
+    const p = this.data.player;
+    if (p && p.stats) {
+      if (p.stats.magic === undefined) p.stats.magic = 4;
+      if (p.stats.knowledge === undefined) p.stats.knowledge = 4;
+      if (p.stats.perception === undefined) p.stats.perception = 4;
+      if (p.stats.social === undefined) p.stats.social = p.stats.persuasion ?? 4;
+      if (p.stats.stamina === undefined) p.stats.stamina = 85;
+    }
+    return p;
   }
 
   modifyStat(statName, delta) {
-    if (this.data.player.stats[statName] !== undefined) {
-      const prev = this.data.player.stats[statName];
-      this.data.player.stats[statName] = Math.max(0, prev + delta);
+    const aliasMap = {
+      '마법': 'magic', '마력': 'magic', 'magic': 'magic',
+      '지식': 'knowledge', '지력': 'knowledge', 'knowledge': 'knowledge',
+      '관찰력': 'perception', '관찰': 'perception', 'perception': 'perception',
+      '사교력': 'social', '사교': 'social', '화술': 'social', 'persuasion': 'social', 'social': 'social',
+      '체력': 'stamina', 'stamina': 'stamina'
+    };
+    const key = aliasMap[statName] || statName;
+    const player = this.getPlayer();
+    if (player && player.stats) {
+      if (player.stats[key] === undefined) {
+        player.stats[key] = key === 'stamina' ? 85 : 4;
+      }
+      const prev = player.stats[key];
+      player.stats[key] = Math.min(100, Math.max(0, prev + delta));
       this.save();
-      this.emit('statChanged', { statName, prev, current: this.data.player.stats[statName], delta });
+      this.emit('statChanged', { statName: key, prev, current: player.stats[key], delta });
       this.emit('change', this.data);
-      return this.data.player.stats[statName];
+      return player.stats[key];
     }
     return null;
   }

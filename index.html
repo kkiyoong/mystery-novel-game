@@ -22,11 +22,11 @@
       </div>
 
       <div class="viewer-actions">
+        <button type="button" id="btn-home-screen" class="btn-icon-label" title="홈 화면으로 이동" aria-label="홈 화면">
+          🏠
+        </button>
         <button type="button" id="btn-sound-toggle" class="btn-icon-label" title="효과음 켜기/끄기" aria-label="효과음">
           🔊
-        </button>
-        <button type="button" id="btn-author-mode" class="btn-portal-mode" title="포털 (편집 모드)" aria-haspopup="dialog" aria-expanded="false" aria-label="편집 모드 포털">
-          🌀
         </button>
         <button type="button" id="btn-reader-settings-toggle" class="btn-icon-label" aria-haspopup="true" aria-expanded="false" title="보기 설정" aria-label="보기 설정">
           ⚙️
@@ -92,9 +92,67 @@
     </div>
   </header>
 
-  <!-- 2. Main Stage (Story Mode ↔ Investigation Mode) -->
+  <!-- 2. Main Stage (Home Mode ↔ Story Mode ↔ Investigation Mode) -->
   <main id="main-stage" class="main-stage">
     
+    <!-- Mode 0: Title & Home Screen -->
+    <section id="home-view" class="home-view" aria-label="홈 화면">
+      <div class="home-container">
+        <!-- Hero Title Banner -->
+        <div class="home-hero">
+          <div class="home-badge">✦ 인터랙티브 미스터리 비주얼 노벨 ✦</div>
+          <h1 class="home-title">아카데미생의 주머니는<br><span class="home-title-highlight">이세계 오파츠 상점</span></h1>
+          <p class="home-subtitle">오파츠 주머니의 비밀을 풀고, 아카데미에 숨겨진 기묘한 진실을 추리하라</p>
+        </div>
+
+        <!-- Progress Card -->
+        <div class="home-progress-card">
+          <div class="progress-card-header">
+            <span class="progress-card-tag">📍 최근 진행 위치</span>
+            <span id="home-progress-badge" class="progress-badge">진행 중</span>
+          </div>
+          <div class="progress-card-body">
+            <div class="progress-location-box">
+              <span class="location-chip">현위치</span>
+              <strong id="home-progress-location" class="location-name">기숙사 앞 복도 (새로운 룸메이트)</strong>
+            </div>
+            <div class="progress-summary-box">
+              <span class="summary-label">최근 사건 요약</span>
+              <p id="home-progress-summary" class="summary-text">칼릭스와의 만남과 같은 방 배정 확인 후 약초학 강의실로 이동</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Menu Action Buttons -->
+        <div class="home-menu-actions">
+          <button type="button" id="btn-home-continue" class="home-btn btn-continue">
+            <span class="btn-icon">▶</span>
+            <span class="btn-text-wrap">
+              <span class="btn-title">이어하기</span>
+              <span class="btn-subtext" id="home-continue-subtext">마지막 진행 장면에서 계속</span>
+            </span>
+          </button>
+
+          <button type="button" id="btn-home-new-game" class="home-btn btn-new-game">
+            <span class="btn-icon">✨</span>
+            <span class="btn-text-wrap">
+              <span class="btn-title">새로 시작하기</span>
+              <span class="btn-subtext">제1화 도입부부터 다시 시작</span>
+            </span>
+          </button>
+
+          <div class="home-sub-actions">
+            <button type="button" id="btn-home-settings" class="home-sub-btn">
+              <span>⚙️ 독서 환경 설정</span>
+            </button>
+            <button type="button" id="btn-home-author" class="home-sub-btn">
+              <span>🌀 포털</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Mode A: Story Reading Mode -->
     <article id="story-view" class="story-view">
       <div class="story-reading-container">
@@ -124,10 +182,12 @@
         <div id="investigation-hotspots" class="investigation-hotspots-layer">
           <!-- Hotspots dynamically pinned via percentage coordinates -->
         </div>
-        <button type="button" id="leave-investigation-btn" class="investigation-exit-btn" aria-label="이동하기: 조사 현장을 떠나 이야기로 돌아가기">
-          <span aria-hidden="true">👣</span>
-          <span>이동하기</span>
-        </button>
+        <div class="investigation-top-actions">
+          <button type="button" id="leave-investigation-btn" class="investigation-exit-btn" aria-label="지도 열기: 장소 이동하기">
+            <span aria-hidden="true">🗺️</span>
+            <span>이동하기</span>
+          </button>
+        </div>
       </div>
 
       <div class="investigation-hint-bar">
@@ -146,9 +206,6 @@
     <span class="handle-text">주머니</span>
     <span id="pocket-badge" class="pocket-badge" aria-label="새로운 알림"></span>
   </button>
-  <div id="pocket-tutorial" class="pocket-tutorial" role="status" aria-live="polite" aria-hidden="true">
-    주머니를 열어보세요
-  </div>
 
   <!-- Floating Pocket Dock -->
   <div id="pocket-wheel-container" class="pocket-wheel-container" role="region" aria-label="주머니 메뉴">
@@ -180,10 +237,19 @@
 
       <div id="dialogue-new-char-widget" class="dialogue-new-char-widget"></div>
 
-      <div class="dialogue-speech-container">
-        <p id="dialogue-speech-text" class="dialogue-speech-text">
+      <!-- Protagonist Monologue/Observation for NPC -->
+      <div id="dialogue-monologue-box" class="inspect-modal-monologue hidden">
+        <span class="monologue-icon">💭</span>
+        <div class="monologue-content">
+          <span class="monologue-speaker">레이든의 독백</span>
+          <div id="dialogue-monologue-text" class="monologue-text"></div>
+        </div>
+      </div>
+
+      <div id="dialogue-speech-container" class="dialogue-speech-container">
+        <div id="dialogue-speech-text" class="dialogue-speech-text">
           규율단 수사관님이시군요. 자정에 갑자기 서고 결계 경보가 울려서 달려왔는데... 벌써 금서가 사라져 있었어요.
-        </p>
+        </div>
       </div>
 
       <div id="dialogue-options-list" class="dialogue-options-list">
@@ -192,19 +258,87 @@
     </div>
   </div>
 
-  <!-- B. Hotspot Inspect Detail Modal -->
+  <!-- B. Hotspot Inspect Detail Modal (Visual Novel Style Bottom Panel) -->
   <div id="inspect-detail-modal" class="inspect-detail-modal hidden" role="dialog" aria-modal="true">
     <div class="inspect-modal-card">
       <header class="inspect-modal-header">
-        <span class="inspect-tag">현장 조사 결과</span>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span class="inspect-tag">🔍 현장 조사 결과</span>
+          <button type="button" id="inspect-modal-close-top" class="btn-close-box" aria-label="조사 닫기">✕</button>
+        </div>
         <h3 id="inspect-modal-title" class="inspect-modal-title">조사 항목</h3>
       </header>
       <div class="inspect-modal-body">
-        <p id="inspect-modal-desc" class="inspect-modal-desc">상세 조사 내용</p>
+        <div id="inspect-modal-desc" class="inspect-modal-desc">상세 조사 내용</div>
+
+        <!-- Protagonist Monologue / Thought -->
+        <div id="inspect-modal-monologue" class="inspect-modal-monologue hidden">
+          <span class="monologue-icon">💭</span>
+          <div class="monologue-content">
+            <span class="monologue-speaker">레이든의 독백</span>
+            <div id="inspect-modal-monologue-text" class="monologue-text"></div>
+          </div>
+        </div>
+
         <div id="inspect-modal-reward" class="inspect-modal-reward hidden"></div>
       </div>
       <footer class="inspect-modal-footer">
-        <button type="button" id="inspect-modal-close" class="btn-primary">확인</button>
+        <button type="button" id="inspect-modal-close" class="btn-primary">확인 (닫기)</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- B-2. Investigation Book Reader Modal (Antique Grimoire / Tome Popup) -->
+  <div id="book-reader-modal" class="book-reader-modal hidden" role="dialog" aria-modal="true" aria-label="책 열람">
+    <div class="book-reader-backdrop"></div>
+    <div class="book-reader-window">
+      <header class="book-reader-header">
+        <div class="book-header-left">
+          <span class="book-badge">📖 고서·일지 열람</span>
+          <h3 id="book-title" class="book-title">책 제목</h3>
+        </div>
+        <button type="button" id="book-close-top-btn" class="book-close-top-btn" aria-label="책 닫기">✕</button>
+      </header>
+
+      <!-- Protagonist Monologue / Thought -->
+      <div id="book-monologue" class="book-monologue hidden">
+        <span class="monologue-icon">💭</span>
+        <div class="monologue-content">
+          <span class="monologue-speaker">레이든의 독백</span>
+          <p id="book-monologue-text" class="monologue-text"></p>
+        </div>
+      </div>
+
+      <!-- Main Layout: Page Sheet + Side Index Bookmarks -->
+      <div class="book-main-layout">
+        <!-- Single Page Sheet View -->
+        <article class="book-page-sheet">
+          <div class="book-page-header">
+            <span id="book-page-badge" class="book-page-badge">제 1 쪽</span>
+            <h4 id="book-page-title" class="book-page-title">페이지 제목</h4>
+          </div>
+          <div id="book-page-content" class="book-page-content">
+            <!-- Parsed page paragraphs and rich widgets -->
+          </div>
+        </article>
+
+        <!-- Side Index Tabs (Bookmarks sticking out of the book) -->
+        <aside class="book-index-aside">
+          <div class="book-index-aside-title">🔖 책갈피 색인</div>
+          <nav id="book-index-nav" class="book-index-nav" aria-label="페이지 목차">
+            <!-- Dynamically populated index bookmark tabs -->
+          </nav>
+        </aside>
+      </div>
+
+      <!-- Footer Navigation Controls -->
+      <footer class="book-reader-footer">
+        <div class="book-nav-controls">
+          <button type="button" id="book-prev-page-btn" class="book-nav-btn">◀ 이전 쪽</button>
+          <span id="book-page-indicator" class="book-page-indicator">1 / 1 쪽</span>
+          <button type="button" id="book-next-page-btn" class="book-nav-btn">다음 쪽 ▶</button>
+        </div>
+        <button type="button" id="book-close-bottom-btn" class="book-bottom-close-btn">책 덮기 (닫기)</button>
       </footer>
     </div>
   </div>
@@ -217,16 +351,29 @@
       <section id="panel-codex" class="drawer-panel-view" role="tabpanel">
         <div class="codex-toolbar">
           <div class="codex-categories">
-            <button type="button" class="codex-filter-btn is-active" data-category="all" aria-pressed="true">전체</button>
-            <button type="button" class="codex-filter-btn" data-category="clue" aria-pressed="false">주제</button>
-            <button type="button" class="codex-filter-btn" data-category="character" aria-pressed="false">인물</button>
-            <button type="button" class="codex-filter-btn" data-category="magic" aria-pressed="false">마법</button>
+            <button type="button" class="codex-filter-btn is-active" data-category="all" aria-pressed="true">
+              전체
+              <span class="category-unread-badge hidden" data-category-badge="all"></span>
+            </button>
+            <button type="button" class="codex-filter-btn" data-category="clue" aria-pressed="false">
+              주제
+              <span class="category-unread-badge hidden" data-category-badge="clue"></span>
+            </button>
+            <button type="button" class="codex-filter-btn" data-category="character" aria-pressed="false">
+              인물
+              <span class="category-unread-badge hidden" data-category-badge="character"></span>
+            </button>
+            <button type="button" class="codex-filter-btn" data-category="magic" aria-pressed="false">
+              마법
+              <span class="category-unread-badge hidden" data-category-badge="magic"></span>
+            </button>
           </div>
           <div class="codex-toolbar-actions">
             <div class="codex-search-box">
-              <input type="search" id="codex-search-input" placeholder="키워드 검색..." class="search-input">
+              <input type="search" id="codex-search-input" placeholder="키워드 및 세부 내용 검색..." class="search-input">
             </div>
-            <button type="button" id="btn-memo-arrange" class="memo-rearrange-btn">재정렬</button>
+            <button type="button" id="btn-memo-mark-all-read" class="memo-rearrange-btn memo-mark-all-btn" title="새로운 정보 모두 읽음" style="display:none;">✓ 모두 읽음</button>
+            <button type="button" id="btn-memo-arrange" class="memo-rearrange-btn" title="직선 정렬">직선 정렬</button>
           </div>
         </div>
 
@@ -239,6 +386,13 @@
               <svg id="memo-hex-svg" class="hex-board-svg" viewBox="-260 -150 520 300" role="group" aria-label="메모 육각 보드">
                 <g id="memo-hex-layer"></g>
               </svg>
+            </div>
+            <div id="memo-eliminated-tray" class="memo-eliminated-tray hidden">
+              <div class="eliminated-tray-header">
+                <span class="eliminated-tray-title">❌ 후보 탈락 칸</span>
+                <span class="eliminated-tray-guide">조건에 맞지 않는 타일은 이 칸으로 옮겨 정리하세요. (클릭하면 다시 보드로 복귀)</span>
+              </div>
+              <div id="memo-eliminated-chips" class="memo-eliminated-chips"></div>
             </div>
             <p id="memo-hex-empty" class="hex-board-empty hidden">해당 조건의 기록이 없습니다.</p>
           </div>
@@ -253,19 +407,28 @@
         <div class="map-container">
           <div class="map-schematic-view">
             <header class="academy-map-heading">
-              <h3>노바리스 아카데미</h3>
-              <span>NOVARIS ACADEMY</span>
+              <div class="academy-map-heading-text">
+                <h3>노바리스 아카데미</h3>
+                <span>NOVARIS ACADEMY</span>
+              </div>
+              <button type="button" id="map-return-story-btn" class="map-return-story-btn" title="탐사 허브로 복귀">
+                <span aria-hidden="true">📋</span>
+                <span>탐사 허브로 복귀</span>
+              </button>
             </header>
             <svg id="academy-map-svg" class="academy-map-svg" viewBox="-290 -175 580 340" preserveAspectRatio="xMidYMid meet" role="group" aria-label="노바리스 아카데미의 등각 지도">
               <g id="academy-map-layer"></g>
             </svg>
           </div>
-          <div id="academy-map-description" class="academy-map-description" aria-live="polite">
+          <div id="academy-map-description" class="academy-map-description" aria-live="polite" role="button" tabindex="0" title="선택한 장소로 이동하기">
             <div class="academy-map-description-copy">
               <strong id="academy-map-location-title"></strong>
               <p id="academy-map-location-description"></p>
             </div>
-            <span class="academy-map-arrow" aria-hidden="true">→</span>
+            <div class="academy-map-action-wrap">
+              <span id="academy-map-action-label" class="academy-map-action-label">이동하기</span>
+              <span class="academy-map-arrow" aria-hidden="true">→</span>
+            </div>
           </div>
         </div>
       </section>
@@ -332,8 +495,9 @@
       <nav class="author-editor-tabs" role="tablist" aria-label="편집할 데이터 종류">
         <button type="button" class="author-editor-tab is-active" data-author-tab="story" role="tab" aria-selected="true">본문 · 선택지</button>
         <button type="button" class="author-editor-tab" data-author-tab="character" role="tab" aria-selected="false">인물</button>
+        <button type="button" class="author-editor-tab" data-author-tab="investigation" role="tab" aria-selected="false">🔍 조사 장면 (대화·상호작용)</button>
         <button type="button" class="author-editor-tab" data-author-tab="map" role="tab" aria-selected="false">지도</button>
-        <button type="button" class="author-editor-tab" data-author-tab="memo" role="tab" aria-selected="false">메모</button>
+        <button type="button" class="author-editor-tab" data-author-tab="memo" role="tab" aria-selected="false">🗂️ 타일 관리 (메모·단서)</button>
         <button type="button" class="author-editor-tab" data-author-tab="inventory" role="tab" aria-selected="false">소지품</button>
       </nav>
       <p id="author-editor-status" class="author-editor-status" role="status" aria-live="polite"></p>
@@ -347,7 +511,7 @@
     <div class="portal-pw-dialog">
       <div class="portal-pw-icon">🌀</div>
       <h3 id="portal-modal-title" class="portal-pw-title">주머니쥐만 포털에 들어갈 수 있어요!</h3>
-      <p class="portal-pw-desc">작가 편집 모드로 통하는 차원문입니다.<br>비밀번호를 입력하여 신원을 확인하세요.</p>
+      <p class="portal-pw-desc">아직 포털에는 주머니쥐만 드나들 수 있습니다.<br>비밀번호를 입력하여 신원을 확인하세요.</p>
       <form id="portal-pw-form" class="portal-pw-form">
         <div class="portal-pw-input-wrapper">
           <input type="password" id="portal-pw-input" class="portal-pw-input" placeholder="비밀번호 입력" maxlength="20" autocomplete="off" required>
@@ -361,7 +525,50 @@
     </div>
   </div>
 
-  <!-- 5. Toast Notifications Container -->
+  <!-- 5. 3-Tier Story Table of Contents (TOC) Modal -->
+  <div id="story-toc-modal" class="story-toc-modal hidden" role="dialog" aria-modal="true" aria-label="회차 및 목차">
+    <div class="story-toc-backdrop"></div>
+    <div class="story-toc-dialog">
+      <div class="toc-modal-header">
+        <div class="toc-header-titles">
+          <div class="toc-tier-hint">
+            <span class="toc-chip-guide chip-vol">대분류: 회차</span>
+            <span class="toc-sep">›</span>
+            <span class="toc-chip-guide chip-ch">중분류: 에피소드</span>
+            <span class="toc-sep">›</span>
+            <span class="toc-chip-guide chip-sc">소분류: 현위치 & 선택지</span>
+          </div>
+          <h2 class="toc-modal-title">📖 전체 회차 · 목차</h2>
+        </div>
+        <button type="button" id="btn-close-story-toc" class="btn-close-text" aria-label="목차 닫기">✕</button>
+      </div>
+      <div id="story-toc-body" class="toc-modal-body">
+        <!-- Dynamically rendered 3-tier TOC -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Story Explanation / Popup Modal -->
+  <div id="story-explanation-modal" class="story-explanation-modal hidden" role="dialog" aria-modal="true" aria-labelledby="explanation-modal-title">
+    <div class="explanation-modal-backdrop"></div>
+    <div class="explanation-modal-dialog">
+      <header class="explanation-modal-header">
+        <div class="explanation-header-main">
+          <span id="explanation-modal-icon" class="explanation-modal-icon" aria-hidden="true">💡</span>
+          <h3 id="explanation-modal-title" class="explanation-modal-title">상세 설명</h3>
+        </div>
+        <button type="button" id="btn-close-explanation-x" class="explanation-modal-close-x" aria-label="설명창 닫기">✕</button>
+      </header>
+      <div class="explanation-modal-body">
+        <div id="explanation-modal-text" class="explanation-modal-text"></div>
+      </div>
+      <footer class="explanation-modal-footer">
+        <button type="button" id="btn-close-explanation" class="explanation-modal-btn-confirm"><span>확인</span></button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- 7. Toast Notifications Container -->
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <!-- Main ES6 Entry Point -->

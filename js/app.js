@@ -9,10 +9,13 @@ import { HexBoard } from './hexBoard.js';
 import { MemoBoard } from './memoBoard.js';
 import { IsometricMap } from './isometricMap.js';
 import { CODEX_CATEGORIES, CODEX_DATA, CLUE_RECIPES } from './data/codexData.js';
-import { MAP_LOCATIONS } from './data/mapData.js';
+import { MAP_LOCATIONS, INVESTIGATION_SCENES } from './data/mapData.js';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js';
 import { AuthorEditor, applySavedAuthorData } from './authorEditor.js?v=6';
 
 const AUTHOR_DATA_LOAD_RESULT = applySavedAuthorData();
+window.state = state;
+window.CODEX_DATA = CODEX_DATA;
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;',
   '<': '&lt;',
@@ -49,27 +52,57 @@ class App {
       playAudio: (type) => this.engine.playAudio(type)
     });
 
+    this.engine.onOpenMap = (targetLocationId = null) => {
+      this.openPocketModal('map');
+      if (targetLocationId && this.isometricMap) {
+        const tile = this.isometricMap.tilesByKey
+          ? Array.from(this.isometricMap.tilesByKey.values()).find((t) => t.location?.id === targetLocationId || t.locationId === targetLocationId)
+          : null;
+        if (tile) {
+          this.isometricMap.selectedKey = tile.key;
+          this.isometricMap.setActiveTile(tile);
+          state.setCurrentMapTileKey(tile.key);
+        }
+      }
+    };
+
+    this.engine.onOpenDeduction = (topicId = null) => {
+      this.openDeductionMode(topicId);
+    };
+
     this.applyReaderSettings(state.getReaderSettings());
     this.initTopViewerBar();
+    this.initHomeView();
+    this.initStoryToc();
     this.initAuthorEditor();
     this.initPocketModals();
     this.initHexBoards();
     this.initDistractionFreeToggle();
 
+    state.on('reset', () => {
+      this.memoBoard?.resetBoardState?.();
+      this.renderCodexList();
+      this.updateCategoryUnreadBadges();
+      this.wheel?.updateNotificationBadge();
+    });
+
     state.on('change', () => {
       this.refreshCurrentPanel();
       this.syncPocketAvailability();
       this.wheel.updateNotificationBadge();
+      this.updateCategoryUnreadBadges();
     });
 
     this.syncPocketAvailability();
+    this.updateCategoryUnreadBadges();
 
-    if (state.getMode() === 'investigation') {
+    if (state.getMode() === 'home') {
+      this.showHomeView();
+    } else if (state.getMode() === 'investigation') {
       this.engine.startInvestigation(state.getCurrentLocationId());
     } else {
       this.engine.renderStoryNode(state.getCurrentNodeId());
     }
-
   }
 
   initAuthorEditor() {
@@ -77,17 +110,27 @@ class App {
       loadError: AUTHOR_DATA_LOAD_RESULT.error,
       onDataChanged: () => {
         this.refreshCurrentPanel();
-        if (state.getMode() === 'investigation') {
-          this.engine.startInvestigation(state.getCurrentLocationId());
-        } else {
-          this.engine.renderStoryNode(state.getCurrentNodeId());
+        const isEditorOpen = this.authorEditor && !this.authorEditor.panel?.classList.contains('hidden');
+        if (!isEditorOpen) {
+          if (state.getMode() === 'investigation') {
+            this.engine.startInvestigation(state.getCurrentLocationId());
+          } else {
+            this.engine.renderStoryNode(state.getCurrentNodeId());
+          }
         }
       },
       onTestStory: (nodeId) => {
         this.closePocketModal();
+        const homeView = document.getElementById('home-view');
+        if (homeView) homeView.classList.add('hidden');
+        const storyView = document.getElementById('story-view');
+        if (storyView) storyView.classList.remove('hidden');
+        const invView = document.getElementById('investigation-view');
+        if (invView) invView.classList.add('hidden');
         state.setMode('story');
         state.setCurrentNode(nodeId);
         this.engine.renderStoryNode(nodeId);
+        this.syncPocketAvailability();
       }
     });
   }
@@ -115,29 +158,24 @@ class App {
 
   syncPocketAvailability() {
     const hasPocket = state.hasPocket();
-    const showTutorial = hasPocket && !state.hasOpenedPocket();
-    const hideHandle = !hasPocket || (this.isControlsHidden && state.getMode() === 'story');
+    const isHome = state.getMode() === 'home';
+    const showTutorial = hasPocket && !state.hasOpenedPocket() && !isHome;
+    const hideHandle = !hasPocket || isHome || (this.isControlsHidden && state.getMode() === 'story');
     const handle = document.getElementById('pocket-handle');
     const quickPocketButton = document.getElementById('btn-quick-pocket');
-    const tutorial = document.getElementById('pocket-tutorial');
 
     if (handle) {
       handle.classList.toggle('is-hidden', hideHandle);
       handle.classList.toggle('is-tutorial', showTutorial);
-      handle.disabled = !hasPocket;
-      handle.tabIndex = hasPocket ? 0 : -1;
-      handle.setAttribute('aria-hidden', String(!hasPocket));
+      handle.disabled = !hasPocket || isHome;
+      handle.tabIndex = (hasPocket && !isHome) ? 0 : -1;
+      handle.setAttribute('aria-hidden', String(!hasPocket || isHome));
     }
 
     if (quickPocketButton) {
-      quickPocketButton.classList.toggle('is-hidden', !hasPocket);
-      quickPocketButton.disabled = !hasPocket;
-      quickPocketButton.setAttribute('aria-hidden', String(!hasPocket));
-    }
-
-    if (tutorial) {
-      tutorial.classList.toggle('is-visible', showTutorial);
-      tutorial.setAttribute('aria-hidden', String(!showTutorial));
+      quickPocketButton.classList.toggle('is-hidden', !hasPocket || isHome);
+      quickPocketButton.disabled = !hasPocket || isHome;
+      quickPocketButton.setAttribute('aria-hidden', String(!hasPocket || isHome));
     }
   }
 
@@ -249,6 +287,14 @@ class App {
       });
     }
 
+    const homeBtn = document.getElementById('btn-home-screen');
+    if (homeBtn) {
+      homeBtn.addEventListener('click', () => {
+        this.showHomeView();
+        this.engine.playAudio('click');
+      });
+    }
+
     const muteBtn = document.getElementById('btn-sound-toggle');
     if (muteBtn) {
       muteBtn.addEventListener('click', () => {
@@ -258,6 +304,274 @@ class App {
         muteBtn.classList.toggle('is-muted', !this.engine.soundEnabled);
       });
     }
+  }
+
+  // --- Home Screen View & Navigation ---
+
+  initHomeView() {
+    const continueBtn = document.getElementById('btn-home-continue');
+    const newGameBtn = document.getElementById('btn-home-new-game');
+    const settingsBtn = document.getElementById('btn-home-settings');
+    const authorBtn = document.getElementById('btn-home-author');
+
+    if (continueBtn) {
+      continueBtn.addEventListener('click', () => {
+        this.resumeGame();
+      });
+    }
+
+    if (newGameBtn) {
+      newGameBtn.addEventListener('click', () => {
+        this.startNewGame();
+      });
+    }
+
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', () => {
+        const toggle = document.getElementById('btn-reader-settings-toggle');
+        if (toggle) toggle.click();
+      });
+    }
+
+    if (authorBtn) {
+      authorBtn.addEventListener('click', () => {
+        if (this.authorEditor) {
+          this.authorEditor.openPortalPasswordModal();
+        } else {
+          const portal = document.getElementById('btn-author-mode');
+          if (portal) portal.click();
+        }
+      });
+    }
+  }
+
+  showHomeView() {
+    const homeView = document.getElementById('home-view');
+    const storyView = document.getElementById('story-view');
+    const investigationView = document.getElementById('investigation-view');
+    const epIndicator = document.getElementById('viewer-episode-title');
+    const chIndicator = document.getElementById('viewer-chapter-title');
+
+    if (homeView) homeView.classList.remove('hidden');
+    if (storyView) storyView.classList.add('hidden');
+    if (investigationView) investigationView.classList.add('hidden');
+
+    if (epIndicator) epIndicator.textContent = '아카데미생의 주머니는 이세계 오파츠 상점';
+    if (chIndicator) chIndicator.textContent = '홈 메뉴';
+
+    state.setMode('home');
+    this.renderHomeProgress();
+    this.syncPocketAvailability();
+  }
+
+  renderHomeProgress() {
+    const lastMode = state.getLastActiveMode();
+    const lastNodeId = state.getLastActiveNodeId();
+    const lastLocId = state.getLastActiveLocationId();
+
+    const locEl = document.getElementById('home-progress-location');
+    const sumEl = document.getElementById('home-progress-summary');
+    const contSubEl = document.getElementById('home-continue-subtext');
+
+    if (lastMode === 'investigation') {
+      const scene = INVESTIGATION_SCENES[lastLocId] || { title: '현장 조사', subtitle: '단서 조사 및 인물 탐색 진행 중' };
+      if (locEl) locEl.textContent = `[현장 조사] ${scene.title}`;
+      if (sumEl) sumEl.textContent = scene.subtitle || '현장의 단서를 터치하여 새로운 정보와 인물을 발견하세요.';
+      if (contSubEl) contSubEl.textContent = `▶ [조사] ${scene.title} 이어하기`;
+    } else {
+      const node = STORY_NODES[lastNodeId] || STORY_NODES['ep1_pocket_intro'];
+      if (locEl) locEl.textContent = `${node.locationName || '기숙사 앞 복도'} (${node.title})`;
+      if (sumEl) sumEl.textContent = node.summary || (node.paragraphs?.[0] || '아카데미의 숨겨진 사건이 전개됩니다.');
+      if (contSubEl) contSubEl.textContent = `▶ ${node.title} 이어하기`;
+    }
+  }
+
+  resumeGame(targetNodeId = null) {
+    const homeView = document.getElementById('home-view');
+    if (homeView) homeView.classList.add('hidden');
+    this.engine.playAudio('click');
+
+    if (targetNodeId) {
+      state.setMode('story');
+      state.setCurrentNode(targetNodeId);
+      this.engine.renderStoryNode(targetNodeId);
+      this.syncPocketAvailability();
+      return;
+    }
+
+    const lastMode = state.getLastActiveMode();
+    if (lastMode === 'investigation') {
+      const locId = state.getLastActiveLocationId();
+      state.setMode('investigation', locId);
+      this.engine.startInvestigation(locId);
+    } else {
+      const nodeId = state.getLastActiveNodeId();
+      state.setMode('story');
+      state.setCurrentNode(nodeId);
+      this.engine.renderStoryNode(nodeId);
+    }
+    this.syncPocketAvailability();
+  }
+
+  startNewGame() {
+    const confirmed = window.confirm('진행 데이터를 처음 상태로 되돌리고 제1화 도입부부터 새로 시작하시겠습니까?');
+    if (!confirmed) return;
+
+    state.reset();
+    this.engine.showToast('새로운 모험이 시작됩니다!', 'success', '✨');
+    this.resumeGame('ep1_pocket_intro');
+  }
+
+  // --- 3-Tier Table of Contents (TOC) ---
+
+  initStoryToc() {
+    const tocModal = document.getElementById('story-toc-modal');
+    const closeBtn = document.getElementById('btn-close-story-toc');
+    const backdrop = tocModal?.querySelector('.story-toc-backdrop');
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.closeStoryToc());
+    }
+
+    if (backdrop) {
+      backdrop.addEventListener('click', () => this.closeStoryToc());
+    }
+
+    if (tocModal) {
+      tocModal.addEventListener('click', (e) => {
+        const jumpBtn = e.target.closest('[data-jump-node]');
+        if (jumpBtn) {
+          const nodeId = jumpBtn.dataset.jumpNode;
+          if (nodeId) {
+            this.closeStoryToc();
+            this.resumeGame(nodeId);
+          }
+        }
+      });
+    }
+  }
+
+  openStoryToc() {
+    this.renderStoryToc();
+    const modal = document.getElementById('story-toc-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+    }
+    this.engine.playAudio('click');
+  }
+
+  closeStoryToc() {
+    const modal = document.getElementById('story-toc-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+    }
+  }
+
+  renderStoryToc() {
+    const tocBody = document.getElementById('story-toc-body');
+    if (!tocBody) return;
+
+    const currentNodeId = state.getCurrentNodeId();
+    const history = state.getHistory() || [];
+
+    // Group nodes by episode, then by chapter
+    const episodeGroups = new Map();
+    Object.values(STORY_NODES).forEach((node) => {
+      const epId = node.episodeId || 'ep1';
+      if (!episodeGroups.has(epId)) episodeGroups.set(epId, new Map());
+      const chapterGroups = episodeGroups.get(epId);
+      const ch = node.chapter || '제1장. 한밤중의 비상 소집';
+      if (!chapterGroups.has(ch)) chapterGroups.set(ch, []);
+      chapterGroups.get(ch).push(node);
+    });
+
+    let html = '';
+
+    episodeGroups.forEach((chapterGroups, epId) => {
+      const episode = STORY_EPISODES[epId] || { title: `회차 ${epId}` };
+      html += `
+        <div class="toc-volume-block">
+          <div class="toc-volume-header">
+            <span class="toc-tier-tag tier-tag-vol">대분류 · 회차</span>
+            <h3 class="toc-volume-title">${escapeHtml(episode.title)}</h3>
+          </div>
+          <div class="toc-volume-content">
+      `;
+
+      chapterGroups.forEach((nodes, chapter) => {
+        html += `
+          <div class="toc-chapter-block">
+            <div class="toc-chapter-header">
+              <span class="toc-tier-tag tier-tag-ch">중분류 · 에피소드</span>
+              <h4 class="toc-chapter-title">${escapeHtml(chapter)}</h4>
+            </div>
+            <div class="toc-scenes-list">
+        `;
+
+        nodes.forEach((node) => {
+          const isCurrent = (node.id === currentNodeId && state.getMode() === 'story');
+          const isCleared = history.includes(node.id);
+          const statusClass = isCurrent ? 'status-current' : (isCleared ? 'status-cleared' : 'status-locked');
+          const statusLabel = isCurrent ? '📍 현재 위치' : (isCleared ? '✔️ 도달 완료' : '🔒 미도달');
+
+          const choicesHtml = (node.choices || []).map((c) => {
+            const isInvest = c.isInvestigationTrigger;
+            return `
+              <li class="toc-choice-item">
+                <div class="toc-choice-header">
+                  <span class="choice-pointer">➔</span>
+                  <span class="choice-name">${escapeHtml(c.text)}</span>
+                  ${isInvest ? `<span class="choice-invest-tag">🔍 현장 조사 분기</span>` : ''}
+                </div>
+                ${c.desc ? `<div class="choice-desc-preview">💬 ${escapeHtml(c.desc)}</div>` : ''}
+              </li>
+            `;
+          }).join('');
+
+          html += `
+            <div class="toc-scene-card ${statusClass}">
+              <div class="toc-scene-head">
+                <div class="toc-scene-titles">
+                  <span class="toc-tier-tag tier-tag-sc">소분류 · 현위치 사건</span>
+                  <div class="toc-scene-name-row">
+                    <strong class="toc-scene-name">${escapeHtml(node.title)}</strong>
+                    <span class="toc-scene-location">📍 ${escapeHtml(node.locationName || '아카데미 구역')}</span>
+                  </div>
+                </div>
+                <span class="toc-scene-status-badge">${statusLabel}</span>
+              </div>
+
+              ${node.summary ? `<p class="toc-scene-summary">${escapeHtml(node.summary)}</p>` : ''}
+
+              <div class="toc-scene-choices-box">
+                <span class="choices-box-title">플레이어 선택지 분기:</span>
+                <ul class="toc-choices-list">
+                  ${choicesHtml || '<li class="toc-choice-empty">선택지 없음</li>'}
+                </ul>
+              </div>
+
+              <div class="toc-scene-actions">
+                <button type="button" class="toc-jump-btn" data-jump-node="${escapeHtml(node.id)}">
+                  ${isCurrent ? '▶ 현재 위치 계속 읽기' : '이 장면으로 이동'}
+                </button>
+              </div>
+            </div>
+          `;
+        });
+
+        html += `
+            </div>
+          </div>
+        `;
+      });
+
+      html += `
+          </div>
+        </div>
+      `;
+    });
+
+    tocBody.innerHTML = html;
   }
 
   initDistractionFreeToggle() {
@@ -321,6 +635,9 @@ class App {
         btn.classList.add('is-active');
         btn.setAttribute('aria-pressed', 'true');
         this.activeCodexCategory = btn.dataset.category;
+        if (this.memoBoard?.focusedKeywordId) {
+          this.memoBoard.exitFocusMode();
+        }
         this.renderCodexList();
         this.memoBoard?.centerClues();
       });
@@ -363,8 +680,34 @@ class App {
       this.isometricMap = new IsometricMap({
         layerEl: mapLayer,
         isLocationUnlocked: (loc) => this.isLocationUnlocked(loc),
-        onTravelToLocation: (loc) => this.travelToLocation(loc),
+        onTravelToLocation: (loc, mode) => this.travelToLocation(loc, mode),
+        onCannotTravel: (tile) => {
+          this.engine.playAudio('click');
+          if (tile?.isCurrent) {
+            this.engine.showToast('이미 현재 위치에 있습니다.', 'info', '📍');
+          } else {
+            this.engine.showToast('지금은 못 가.', 'warning', '🚫');
+          }
+        },
         onSetCurrentTile: (tileKey) => state.setCurrentMapTileKey(tileKey)
+      });
+    }
+
+    const returnStoryBtn = document.getElementById('map-return-story-btn');
+    if (returnStoryBtn) {
+      returnStoryBtn.addEventListener('click', () => {
+        this.closePocketModal();
+        const currentEp = (state.getCurrentEpisodeId && state.getCurrentEpisodeId()) || 'ep1';
+        const hubNode = STORY_EPISODES[currentEp]?.hubNode ||
+          Object.values(STORY_NODES).find((n) => n.isHubNode || (n.chapter && n.chapter.includes('탐사 허브')))?.id ||
+          (STORY_NODES['story_1795192473432'] ? 'story_1795192473432' : 'ep1_return_from_investigation');
+        const currentLocId = state.getCurrentLocationId();
+        const scene = INVESTIGATION_SCENES[currentLocId];
+        const targetNode = hubNode || scene?.exitStoryNode || state.getLastActiveNodeId() || 'ep1_return_from_investigation';
+        state.setMode('story');
+        state.setCurrentNode(targetNode);
+        this.engine.renderStoryNode(targetNode);
+        this.engine.showToast('탐사 허브로 복귀했습니다.', 'info', '📋');
       });
     }
 
@@ -430,12 +773,23 @@ class App {
           this.engine.showToast(`${node.label}을 세웠습니다.`, 'success', '💡');
         },
         onPuzzleSolved: (subNode, matchedClues) => {
+          if (state.getFlag('deduction_any_solved')) return;
           this.engine.playAudio('codexUnlock');
+          state.setFlag('deduction_any_solved', true);
           const names = matchedClues.map(c => `[${c.label}]`).join(' + ');
           this.engine.showToast(`🎉 [추론 완성] ${names} 조건을 만족하는 '${subNode.label}'을 찾아냈습니다!`, 'success', '✨');
+          const cur = state.getCurrentNodeId();
+          if (STORY_NODES[cur]) {
+            this.engine.renderStoryNode(cur);
+          }
         }
       });
       this.hexBoards.memo = this.memoBoard;
+      state.on('tileRecordUnlocked', () => {
+        if (this.memoBoard) {
+          this.memoBoard.render();
+        }
+      });
     }
 
     document.querySelectorAll('.hex-board-controls button').forEach((button) => {
@@ -453,9 +807,39 @@ class App {
       });
     });
 
-    document.getElementById('btn-memo-arrange')?.addEventListener('click', () => {
-      this.memoBoard?.arrangeClues();
-    });
+    const arrangeBtn = document.getElementById('btn-memo-arrange');
+    if (arrangeBtn) {
+      arrangeBtn.addEventListener('click', () => {
+        if (!this.memoBoard) return;
+        const result = this.memoBoard.arrangeClues();
+        this.engine.playAudio('wheelTick');
+        if (result?.mode === 'hex') {
+          arrangeBtn.textContent = '육각형 정렬';
+          arrangeBtn.title = '육각형 정렬';
+          this.engine.showToast('육각형 정렬', 'info', '⬡');
+        } else {
+          arrangeBtn.textContent = '직선 정렬';
+          arrangeBtn.title = '직선 정렬';
+          this.engine.showToast('직선 정렬', 'info', '━');
+        }
+      });
+    }
+
+    const markAllReadBtn = document.getElementById('btn-memo-mark-all-read');
+    if (markAllReadBtn) {
+      markAllReadBtn.addEventListener('click', () => {
+        state.markAllCodexRead();
+        if (this.memoBoard) {
+          this.memoBoard.readNewIds.clear();
+          this.memoBoard.render();
+        }
+        this.renderCodexList();
+        this.updateCategoryUnreadBadges();
+        this.wheel?.updateNotificationBadge();
+        this.engine.playAudio('codexUnlock');
+        this.engine.showToast('새로운 정보를 모두 확인했습니다.', 'success', '✓');
+      });
+    }
   }
 
   openPocketModal(panelId = 'codex') {
@@ -471,6 +855,21 @@ class App {
 
     this.switchPocketPanel(panelId);
     this.engine.playAudio('drawerOpen');
+  }
+
+  openDeductionMode(topicId = null) {
+    this.openPocketModal('codex');
+    const clueFilterBtn = document.querySelector('.codex-filter-btn[data-category="clue"]');
+    if (clueFilterBtn) {
+      clueFilterBtn.click();
+    }
+    const targetTopic = topicId || 'clue_herb_quiz';
+    if (this.memoBoard) {
+      setTimeout(() => {
+        this.memoBoard.enterFocusMode(targetTopic);
+      }, 50);
+    }
+    this.engine.showToast('수첩에서 단서들을 짜맞춰보는 추론 모드입니다.', 'info', '🧩');
   }
 
   closePocketModal() {
@@ -531,16 +930,102 @@ class App {
         .map((category) => category.id)
         .filter((categoryId) => categoryId !== 'item' && categoryId !== 'episode')
     );
-    const filtered = CODEX_DATA.filter((entry) => {
+
+    const q = (this.activeCodexSearch || '').trim().toLowerCase();
+    const stateRecords = state.getUnlockedTileRecords();
+
+    const allEntries = [...CODEX_DATA];
+    const existingIds = new Set(CODEX_DATA.map((c) => c.id));
+    const unlockedCodex = state.getUnlockedCodex() || {};
+
+    Object.entries(unlockedCodex).forEach(([id, codexItem]) => {
+      if (codexItem && codexItem.unlocked && !existingIds.has(id)) {
+        // Filter out legacy dummy template IDs or invalid entries
+        if (id === 'ep_01' || id === 'char_aren' || id === 'item_inquisitor_badge' || id === 'magic_resonance') return;
+        if (id.startsWith('ep_') || id.startsWith('item_')) return;
+
+        let cat = codexItem.category;
+        if (!cat) {
+          if (id.startsWith('char_')) cat = 'character';
+          else if (id.startsWith('magic_')) cat = 'magic';
+          else cat = 'clue';
+        }
+        let title = codexItem.title || codexItem.name || id.replace(/^(clue_|char_|magic_)/, '');
+        allEntries.push({
+          id,
+          category: cat,
+          role: cat === 'clue' ? 'keyword' : undefined,
+          title,
+          icon: codexItem.icon || (cat === 'character' ? '👤' : (cat === 'magic' ? '✨' : '🌿')),
+          summary: codexItem.summary || codexItem.desc || `${title}에 대한 수사 기록입니다.`,
+          description: codexItem.description || codexItem.desc || `${title}에 관한 상세 정보입니다.`,
+          unlockedByDefault: false,
+          keywords: [title]
+        });
+        existingIds.add(id);
+      }
+    });
+
+    this.updateCategoryUnreadBadges(allEntries);
+
+    const filtered = allEntries.filter((entry) => {
       const matchCat = this.activeCodexCategory === 'all'
         ? memoCategories.has(entry.category)
         : entry.category === this.activeCodexCategory;
-      const matchSearch =
-        !this.activeCodexSearch ||
-        (entry.title || '').toLowerCase().includes(this.activeCodexSearch) ||
-        (entry.summary || '').toLowerCase().includes(this.activeCodexSearch) ||
-        entry.keywords?.some((keyword) => keyword.toLowerCase().includes(this.activeCodexSearch));
-      return matchCat && matchSearch;
+
+      if (!matchCat) return false;
+      if (!q) return true;
+
+      // 1. Core fields check (title, summary, description, keywords, answers)
+      const matchMain =
+        (entry.title || '').toLowerCase().includes(q) ||
+        (entry.summary || '').toLowerCase().includes(q) ||
+        (entry.description || '').toLowerCase().includes(q) ||
+        entry.keywords?.some((keyword) => keyword.toLowerCase().includes(q)) ||
+        entry.answers?.some((ans) => (typeof ans === 'string' ? ans : ans.text || '').toLowerCase().includes(q));
+
+      if (matchMain) return true;
+
+      // 2. Detail tiles check (subItems: label, desc, sub, records)
+      const matchSubItems = (entry.subItems || []).some((sub) => {
+        if (!sub) return false;
+        if (typeof sub === 'string') return sub.toLowerCase().includes(q);
+        const lMatch = (sub.label || '').toLowerCase().includes(q);
+        const dMatch = (sub.desc || sub.description || '').toLowerCase().includes(q);
+        const sMatch = (sub.sub || '').toLowerCase().includes(q);
+        if (lMatch || dMatch || sMatch) return true;
+        if (Array.isArray(sub.records)) {
+          return sub.records.some((rec) => (rec?.text || '').toLowerCase().includes(q));
+        }
+        return false;
+      });
+
+      if (matchSubItems) return true;
+
+      // 3. SubClues check (subClues: label, desc, sub, validTargets, invalidTargets)
+      const matchSubClues = (entry.subClues || []).some((sc) => {
+        if (!sc) return false;
+        if ((sc.label || sc.title || '').toLowerCase().includes(q)) return true;
+        if ((sc.desc || sc.conditionDesc || '').toLowerCase().includes(q)) return true;
+        if ((sc.sub || '').toLowerCase().includes(q)) return true;
+        if (Array.isArray(sc.validTargets) && sc.validTargets.some((t) => (t || '').toLowerCase().includes(q))) return true;
+        if (Array.isArray(sc.invalidTargets) && sc.invalidTargets.some((t) => (t || '').toLowerCase().includes(q))) return true;
+        return false;
+      });
+
+      if (matchSubClues) return true;
+
+      // 4. Dynamic unlocked tile records from state check
+      const matchDynamicRecords = Object.values(stateRecords).some((rec) => {
+        if (!rec || !rec.text || !rec.text.toLowerCase().includes(q)) return false;
+        if (rec.tileId === entry.id || rec.tileId === entry.title) return true;
+        if (Array.isArray(entry.subItems)) {
+          return entry.subItems.some((si) => si && (si.id === rec.tileId || si.label === rec.tileId));
+        }
+        return false;
+      });
+
+      return matchDynamicRecords;
     });
 
     if (filtered.length === 0) {
@@ -554,8 +1039,8 @@ class App {
       CODEX_CATEGORIES.find((category) => category.id === categoryId)?.label || categoryId;
     const isUnlocked = (entry) =>
       state.isCodexUnlocked(entry.id) || Boolean(entry.unlockedByDefault);
-    const clueEntries = filtered.filter((entry) => entry.category === 'clue');
-    const clueNodes = clueEntries.map((entry) => {
+    const topicEntries = filtered.filter((entry) => entry.category !== 'character' && entry.category !== 'item' && entry.category !== 'episode');
+    const clueNodes = topicEntries.map((entry) => {
       const unlocked = isUnlocked(entry);
       const codexState = state.getUnlockedCodex()[entry.id];
       const subItems = filtered
@@ -579,14 +1064,20 @@ class App {
         isNew: Boolean(state.getUnlockedCodex()[sc.id]?.isNew && !board.readNewIds.has(sc.id))
       }));
 
+      const unlockedSubItems = (entry.subItems || []).filter((si) => {
+        if (!si) return false;
+        if (typeof si === 'string') return true;
+        return si.unlockedByDefault !== false || Boolean(state.getFlag(`unlocked_sub_${si.id}`)) || state.isCodexUnlocked(si.id);
+      });
+
       return {
         ...entry,
         entry,
         role: entry.role || 'keyword',
-        label: unlocked ? (entry.keywords?.[0] || entry.title) : '미발견',
-        sub: categoryLabel('clue'),
+        label: unlocked ? (entry.title || entry.keywords?.[0]) : '미발견',
+        sub: categoryLabel(entry.category || 'clue'),
         subClues: unlockedSubClues,
-        subItems: entry.subItems?.length ? entry.subItems : subItems,
+        subItems: Array.isArray(entry.subItems) ? unlockedSubItems : subItems,
         locked: !unlocked,
         isNew: Boolean(codexState && codexState.isNew && !board.readNewIds.has(entry.id)),
         accessibleLabel: unlocked ? entry.title : '미발견 기록'
@@ -620,7 +1111,9 @@ class App {
         }))
       };
     });
-    const boardNodes = [...clueNodes, ...categoryIndexes];
+    const boardNodes = (this.activeCodexCategory === 'character' || this.activeCodexCategory === 'magic')
+      ? categoryIndexes
+      : clueNodes;
     const visibleBoardNodes = boardNodes.filter((node) => !node.locked);
     if (visibleBoardNodes.length === 0) {
       board.setClues([], { includeHypotheses: false, selectedId: null });
@@ -630,6 +1123,50 @@ class App {
     }
 
     if (emptyMessage) emptyMessage.classList.add('hidden');
+
+    // Find if a specific subItem or subClue matched the search query
+    let matchedSubItem = null;
+    let matchedSubItemParentNode = null;
+    let matchedSubClue = null;
+    let matchedSubClueParentNode = null;
+
+    if (q) {
+      for (const node of visibleBoardNodes) {
+        if (Array.isArray(node.subItems)) {
+          const found = node.subItems.find((sub) => {
+            if (!sub) return false;
+            if (typeof sub === 'string') return sub.toLowerCase().includes(q);
+            const lMatch = (sub.label || '').toLowerCase().includes(q);
+            const dMatch = (sub.desc || sub.description || '').toLowerCase().includes(q);
+            const sMatch = (sub.sub || '').toLowerCase().includes(q);
+            const rMatch = Array.isArray(sub.records) && sub.records.some((r) => (r?.text || '').toLowerCase().includes(q));
+            return lMatch || dMatch || sMatch || rMatch;
+          });
+          if (found) {
+            matchedSubItem = typeof found === 'string'
+              ? { id: `${node.id}_kw_search`, label: found, sub: '세부 타일', desc: node.desc || node.summary }
+              : found;
+            matchedSubItemParentNode = node;
+            break;
+          }
+        }
+        if (!matchedSubItem && Array.isArray(node.subClues)) {
+          const found = node.subClues.find((sc) => {
+            if (!sc) return false;
+            const lMatch = (sc.label || sc.title || '').toLowerCase().includes(q);
+            const dMatch = (sc.desc || sc.conditionDesc || '').toLowerCase().includes(q);
+            const sMatch = (sc.sub || '').toLowerCase().includes(q);
+            return lMatch || dMatch || sMatch;
+          });
+          if (found) {
+            matchedSubClue = found;
+            matchedSubClueParentNode = node;
+            break;
+          }
+        }
+      }
+    }
+
     const selectedEntry = filtered.find((entry) => entry.id === this.selectedCodexId && isUnlocked(entry));
     const selectedIndex = visibleBoardNodes.find((node) =>
       node.isCategoryIndex && node.category === this.selectedMemoIndexCategory
@@ -640,25 +1177,73 @@ class App {
         ? selectedEntry.id
         : visibleBoardNodes.find((node) => node.category === selectedEntry.category)?.id;
     }
+    if (matchedSubItemParentNode) {
+      selectedBoardId = matchedSubItemParentNode.id;
+    } else if (matchedSubClueParentNode) {
+      selectedBoardId = matchedSubClueParentNode.id;
+    }
     selectedBoardId ||= visibleBoardNodes[0]?.id;
     const selectedBoardNode = visibleBoardNodes.find((node) => node.id === selectedBoardId) || visibleBoardNodes[0];
 
     board.setClues(visibleBoardNodes, {
       includeHypotheses:
         (this.activeCodexCategory === 'all' || this.activeCodexCategory === 'clue') &&
-        !this.activeCodexSearch,
+        !q,
       selectedId: selectedBoardNode.id
     });
-    const selectedDetail = filtered.find((entry) =>
-      entry.id === this.selectedMemoDetailId && isUnlocked(entry)
-    );
-    if (selectedDetail) {
-      this.selectCodexEntry(selectedDetail);
-    } else if (selectedBoardNode.isCategoryIndex) {
-      this.selectMemoCategoryIndex(selectedBoardNode);
+
+    if (matchedSubItem && matchedSubItemParentNode) {
+      board.expandedId = matchedSubItemParentNode.id;
+      board.pinnedId = matchedSubItemParentNode.id;
+      if (matchedSubItem.id) board.selectedId = matchedSubItem.id;
+      board.render();
+      this.selectCodexSubItem({
+        ...matchedSubItem,
+        parentEntry: matchedSubItemParentNode.entry || matchedSubItemParentNode
+      });
+    } else if (matchedSubClue && matchedSubClueParentNode) {
+      board.expandedId = matchedSubClueParentNode.id;
+      board.pinnedId = matchedSubClueParentNode.id;
+      if (matchedSubClue.id) board.selectedId = matchedSubClue.id;
+      board.render();
+      this.selectCodexMidClue({
+        ...matchedSubClue,
+        isMidClue: true,
+        parentEntry: matchedSubClueParentNode.entry || matchedSubClueParentNode
+      });
     } else {
-      this.selectedCodexId = selectedBoardNode.id;
-      this.selectCodexEntry(selectedBoardNode.entry);
+      const selectedDetail = filtered.find((entry) =>
+        entry.id === this.selectedMemoDetailId && isUnlocked(entry)
+      );
+      if (selectedDetail) {
+        this.selectCodexEntry(selectedDetail);
+      } else if (selectedBoardNode.isCategoryIndex) {
+        this.selectMemoCategoryIndex(selectedBoardNode);
+      } else {
+        this.selectedCodexId = selectedBoardNode.id;
+        this.selectCodexEntry(selectedBoardNode.entry);
+      }
+    }
+  }
+
+  updateCategoryUnreadBadges(codexList = CODEX_DATA) {
+    const counts = state.getUnreadCountByCategory(codexList);
+    ['all', 'clue', 'character', 'magic'].forEach((cat) => {
+      const badgeEl = document.querySelector(`[data-category-badge="${cat}"]`);
+      if (badgeEl) {
+        const count = counts[cat] || 0;
+        if (count > 0) {
+          badgeEl.textContent = count > 9 ? '9+' : String(count);
+          badgeEl.classList.remove('hidden');
+        } else {
+          badgeEl.classList.add('hidden');
+        }
+      }
+    });
+
+    const markAllReadBtn = document.getElementById('btn-memo-mark-all-read');
+    if (markAllReadBtn) {
+      markAllReadBtn.style.display = counts.all > 0 ? 'inline-flex' : 'none';
     }
   }
 
@@ -668,19 +1253,11 @@ class App {
     this.selectedMemoDetailId = null;
     if (this.memoBoard) {
       this.memoBoard.readNewIds.add(node.id);
-      if (node.subItems) {
-        node.subItems.forEach((si) => {
-          this.memoBoard.readNewIds.add(si.id);
-          if (si.entry?.id) this.memoBoard.readNewIds.add(si.entry.id);
-        });
-      }
       this.memoBoard.render();
     }
-    if (node.subItems) {
-      node.subItems.forEach((si) => {
-        if (si.entry?.id) state.markCodexRead(si.entry.id);
-      });
-    }
+    this.updateCategoryUnreadBadges();
+    this.wheel?.updateNotificationBadge();
+
     const detailContainer = document.getElementById('codex-entry-detail');
     if (!detailContainer) return;
 
@@ -706,12 +1283,50 @@ class App {
 
     const description = document.createElement('div');
     description.className = 'detail-description';
+    const count = (node.subItems || []).length;
     const paragraph = document.createElement('p');
-    const count = node.subItems.length;
     paragraph.textContent = count
-      ? `발견한 ${node.label} 기록 ${count}개가 하위 타일에 정리되어 있습니다. 타일을 선택해 내용을 확인하세요.`
+      ? `발견한 ${node.label} 기록 ${count}개가 등록되어 있습니다. 항목을 선택하여 상세 내용을 확인하세요.`
       : `아직 발견한 ${node.label} 기록이 없습니다. 인물과 현장을 조사하면 이곳에 기록이 추가됩니다.`;
     description.appendChild(paragraph);
+
+    if (count > 0) {
+      const grid = document.createElement('div');
+      grid.className = 'category-entries-grid';
+      node.subItems.forEach((si) => {
+        const card = document.createElement('div');
+        const isNew = Boolean(si.isNew || state.getUnlockedCodex()[si.entry?.id]?.isNew);
+        card.className = `category-entry-card ${isNew ? 'is-new-card' : ''}`;
+
+        const entryIcon = si.entry?.icon || '👤';
+        const iconHtml = entryIcon.includes('/')
+          ? `<img src="${escapeHtml(entryIcon)}" alt="" style="width:26px; height:26px; object-fit:contain; border-radius:50%;">`
+          : `<span style="font-size:20px;">${escapeHtml(entryIcon)}</span>`;
+
+        card.innerHTML = `
+          <div class="card-icon" style="width:34px; height:34px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:var(--bg-dim); flex-shrink:0;">
+            ${iconHtml}
+          </div>
+          <div class="card-info" style="flex:1; min-width:0;">
+            <strong style="display:block; font-size:13px; color:var(--text-main);">${escapeHtml(si.label)}</strong>
+            <span style="display:block; font-size:11px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(si.desc || '')}</span>
+          </div>
+          ${isNew ? '<span class="entry-card-new-pill">NEW</span>' : ''}
+        `;
+
+        card.addEventListener('click', () => {
+          if (si.entry) {
+            this.selectedCodexId = si.entry.id;
+            this.selectCodexEntry(si.entry);
+          } else {
+            this.selectCodexSubItem(si);
+          }
+        });
+        grid.appendChild(card);
+      });
+      description.appendChild(grid);
+    }
+
     content.append(header, description);
     detailContainer.replaceChildren(content);
   }
@@ -756,6 +1371,7 @@ class App {
 
   selectCodexSubItem(node) {
     this.selectedCodexId = node.id;
+    const wasNew = Boolean(node.isNew || state.getUnlockedCodex()[node.entry?.id]?.isNew);
     if (node.id) {
       state.markCodexRead(node.id);
       state.markTileRecordRead(node.id);
@@ -769,6 +1385,8 @@ class App {
       if (node.parentEntry?.id) this.memoBoard.readNewIds.add(node.parentEntry.id);
       this.memoBoard.render();
     }
+    this.updateCategoryUnreadBadges();
+    this.wheel?.updateNotificationBadge();
     const detailContainer = document.getElementById('codex-entry-detail');
     if (!detailContainer) return;
 
@@ -817,6 +1435,49 @@ class App {
       </div>
     ` : '';
 
+    let validationBannerHtml = '';
+    if (node.validationState === 'unknown') {
+      validationBannerHtml = `
+        <div style="margin-top:14px; padding:10px 14px; background:rgba(148, 163, 184, 0.12); border:1.5px dashed #94a3b8; border-radius:8px; display:flex; align-items:center; gap:10px;">
+          <span style="font-size:22px;">🤔</span>
+          <div>
+            <strong style="color:#334155; font-size:12.5px; display:block;">단서 조건 미판정 ("잘은 모르겠다")</strong>
+            <span style="color:#64748b; font-size:11.5px; line-height:1.4; display:block;">단서 타일에 배치되었으나, 아직 이 조건에 부합하는지 여부를 판단할 세부 설명(관찰 기록)을 발견하지 못했습니다. 본문이나 탐사 현장을 조사하여 관련 기록을 확보해보세요.</span>
+          </div>
+        </div>
+      `;
+    } else if (node.validationState === 'valid') {
+      validationBannerHtml = `
+        <div style="margin-top:14px; padding:10px 14px; background:rgba(41, 128, 185, 0.12); border:1.5px solid #2980b9; border-radius:8px; display:flex; align-items:center; gap:10px;">
+          <span style="font-size:22px;">🔵</span>
+          <div>
+            <strong style="color:#2980b9; font-size:12.5px; display:block;">단서 조건 부합 (참)</strong>
+            <span style="color:#1b4f72; font-size:11.5px; line-height:1.4; display:block;">발견한 조사 기록을 바탕으로 이 단서의 조건과 일치함을 확인했습니다!</span>
+          </div>
+        </div>
+      `;
+    } else if (node.validationState === 'invalid') {
+      validationBannerHtml = `
+        <div style="margin-top:14px; padding:10px 14px; background:rgba(192, 57, 43, 0.12); border:1.5px solid #c0392b; border-radius:8px; display:flex; align-items:center; gap:10px;">
+          <span style="font-size:22px;">🔴</span>
+          <div>
+            <strong style="color:#c0392b; font-size:12.5px; display:block;">단서 조건 모순 (거짓)</strong>
+            <span style="color:#78281f; font-size:11.5px; line-height:1.4; display:block;">발견한 조사 기록과 비교했을 때 이 단서의 조건과 맞지 않는 거짓(모순)입니다.</span>
+          </div>
+        </div>
+      `;
+    }
+
+    let elimButtonHtml = '';
+    if (this.memoBoard?.focusedKeywordId) {
+      const isEliminated = this.memoBoard.eliminatedTileIds?.has(node.id);
+      if (isEliminated) {
+        elimButtonHtml = `<button type="button" id="btn-subitem-restore" class="memo-btn-restore">↩ 보드로 복귀</button>`;
+      } else {
+        elimButtonHtml = `<button type="button" id="btn-subitem-eliminate" class="memo-btn-eliminate">❌ 후보 탈락 칸으로 이동</button>`;
+      }
+    }
+
     detailContainer.innerHTML = `
       <div class="codex-detail-content">
         <header class="detail-header">
@@ -830,14 +1491,33 @@ class App {
           <blockquote class="detail-summary">"${escapeHtml(subTitle)}" (상위 항목: ${escapeHtml(parentTitle)})</blockquote>
           <div class="detail-description">
             <p>${escapeHtml(subDesc)}</p>
+            ${validationBannerHtml}
             ${recordsHtml}
           </div>
         </div>
         <footer class="detail-footer">
           <span class="detail-status-pill">✓ 세부 단서 확인 완료</span>
+          ${elimButtonHtml}
         </footer>
       </div>
     `;
+
+    const elimBtn = detailContainer.querySelector('#btn-subitem-eliminate');
+    if (elimBtn) {
+      elimBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.memoBoard?.eliminateTile(node);
+        this.selectCodexSubItem(node);
+      });
+    }
+    const restoreBtn = detailContainer.querySelector('#btn-subitem-restore');
+    if (restoreBtn) {
+      restoreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.memoBoard?.restoreTile(node.id);
+        this.selectCodexSubItem(node);
+      });
+    }
   }
 
   selectCodexMidClue(node) {
@@ -899,6 +1579,7 @@ class App {
     this.selectedMemoDetailId = entry.id;
     this.selectedMemoIndexCategory = entry.category === 'clue' ? null : entry.category;
     const isUnlocked = state.isCodexUnlocked(entry.id) || Boolean(entry.unlockedByDefault);
+    const wasNew = Boolean(state.getUnlockedCodex()[entry.id]?.isNew);
 
     if (state.isCodexUnlocked(entry.id)) {
       state.markCodexRead(entry.id);
@@ -907,6 +1588,8 @@ class App {
       this.memoBoard.readNewIds.add(entry.id);
       this.memoBoard.render();
     }
+    this.updateCategoryUnreadBadges();
+    this.wheel?.updateNotificationBadge();
 
     const detailContainer = document.getElementById('codex-entry-detail');
     if (!detailContainer) return;
@@ -932,10 +1615,13 @@ class App {
       ? `<div class="detail-portrait-box"><img src="${escapeHtml(entry.image)}" class="detail-portrait-img" alt="${escapeHtml(entry.title)}"></div>`
       : '';
 
+    const newPillHtml = wasNew ? `<span class="detail-new-pill">✨ 새로 등록된 정보</span>` : '';
+
     detailContainer.innerHTML = `
       <div class="codex-detail-content">
         <header class="detail-header">
           <span class="detail-category-badge">${categoryLabel}</span>
+          ${newPillHtml}
           <div class="detail-title-row">
             <span class="detail-icon">${iconHtml}</span>
             <h3 class="detail-title">${escapeHtml(entry.title)}</h3>
@@ -968,21 +1654,46 @@ class App {
     return Boolean(loc.unlocked || (loc.requiredFlag && state.getFlag(loc.requiredFlag)));
   }
 
-  travelToLocation(loc) {
+  travelToLocation(loc, preferredMode = null) {
+    if (!loc) return;
     this.closePocketModal();
     state.setCurrentLocationId(loc.id);
 
-    if (loc.hasInvestigation) {
-      state.setMode('investigation', loc.id);
-      this.engine.startInvestigation(loc.id);
-      this.engine.showToast(`[${loc.name}] 현장 조사 모드로 진입했습니다.`, 'info', loc.icon);
-    } else if (loc.targetStoryNode) {
+    const hasStory = Boolean(loc.targetStoryNode);
+    const hasInv = Boolean(loc.hasInvestigation);
+
+    let mode = preferredMode;
+    if (!mode) {
+      if (loc.destinationType === 'story') mode = 'story';
+      else if (loc.destinationType === 'investigation') mode = 'investigation';
+      else if (loc.travelMode === 'story') mode = 'story';
+      else if (loc.travelMode === 'investigation') mode = 'investigation';
+      else if (hasStory && !hasInv) mode = 'story';
+      else if (hasInv && !hasStory) mode = 'investigation';
+      else if (hasStory) mode = 'story';
+      else mode = 'investigation';
+    }
+
+    if (mode === 'story' && hasStory) {
       state.setMode('story');
       state.setCurrentNode(loc.targetStoryNode);
       this.engine.renderStoryNode(loc.targetStoryNode);
-      this.engine.showToast(`[${loc.name}]으로 이동했습니다.`, 'info', loc.icon);
+      this.engine.showToast(`[${loc.name}](으)로 이동했습니다.`, 'info', loc.icon || '📍');
+    } else if (mode === 'investigation' && hasInv) {
+      state.setMode('investigation', loc.id);
+      this.engine.startInvestigation(loc.id);
+      this.engine.showToast(`[${loc.name}](으)로 이동했습니다.`, 'info', loc.icon || '📍');
+    } else if (hasStory) {
+      state.setMode('story');
+      state.setCurrentNode(loc.targetStoryNode);
+      this.engine.renderStoryNode(loc.targetStoryNode);
+      this.engine.showToast(`[${loc.name}](으)로 이동했습니다.`, 'info', loc.icon || '📍');
+    } else if (hasInv) {
+      state.setMode('investigation', loc.id);
+      this.engine.startInvestigation(loc.id);
+      this.engine.showToast(`[${loc.name}](으)로 이동했습니다.`, 'info', loc.icon || '📍');
     } else {
-      this.engine.showToast(`[${loc.name}]으로 이동했습니다.`, 'info', loc.icon);
+      this.engine.showToast(`[${loc.name}](으)로 이동했습니다.`, 'info', loc.icon || '📍');
     }
   }
 
@@ -1148,10 +1859,11 @@ class App {
     if (!statsContainer) return;
 
     const statLabels = [
-      { key: 'perception', label: '관찰력', icon: '👁️', max: 10, desc: '사소한 불일치, 비밀 틈새 및 숨은 물건을 발견하는 감각.' },
-      { key: 'magic', label: '마력', icon: '✨', max: 10, desc: '고대 룬 문자 해독 및 결계 공명 주문을 다루는 능력.' },
-      { key: 'persuasion', label: '화술', icon: '🗣️', max: 10, desc: '상대방의 심리를 꿰뚫고 자백을 유도하는 심문 기술.' },
-      { key: 'stamina', label: '체력', icon: '❤️', max: 100, desc: '밤샘 수사와 긴박한 추격전을 버텨내는 기력.' }
+      { key: 'magic', label: '마법', icon: '✨', max: 100, desc: '고대 마법 소질과 아티팩트 조작 및 마력 감응 능력.' },
+      { key: 'knowledge', label: '지식', icon: '📖', max: 100, desc: '아카데미 교양, 역사, 마도학 및 연금술적 학술 지식.' },
+      { key: 'perception', label: '관찰력', icon: '👁️', max: 100, desc: '사소한 불일치, 비밀 틈새 및 숨은 단서를 감지하는 예리함.' },
+      { key: 'social', label: '사교력', icon: '🗣️', max: 100, desc: '타인과의 대화, 교섭, 인맥 활용 및 심리 유도 능력.' },
+      { key: 'stamina', label: '체력', icon: '⚡', max: 100, desc: '행동과 탐색, 긴박한 상황을 버텨내는 신체적 기력.' }
     ];
 
     let html = `
@@ -1169,7 +1881,12 @@ class App {
     `;
 
     statLabels.forEach((st) => {
-      const val = player.stats[st.key] || 0;
+      let val = player.stats?.[st.key];
+      if (val === undefined) {
+        if (st.key === 'social') val = player.stats?.persuasion ?? 4;
+        else if (st.key === 'stamina') val = 85;
+        else val = 4;
+      }
       const pct = Math.min(100, Math.round((val / st.max) * 100));
 
       html += `
