@@ -1793,16 +1793,54 @@ body.theme-dark .novel-glow-text.novel-glow-green {
   color: #FBBF24;
 }
 
-.hotspot-tooltip-hint {
+.hotspot-tooltip-hint-mobile {
+  display: none;
   font-size: 10px;
   font-weight: 500;
   color: #94A3B8;
+}
+
+.hotspot-tooltip-hint-desktop {
+  display: inline;
+  font-size: 10px;
+  font-weight: 500;
+  color: #94A3B8;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .hotspot-tooltip-hint-mobile {
+    display: inline;
+  }
+  .hotspot-tooltip-hint-desktop {
+    display: none;
+  }
+}
+
+.hotspot-tooltip.align-right {
+  left: auto;
+  right: 0;
+  transform: translateY(4px);
+}
+
+.hotspot-tooltip.align-left {
+  left: 0;
+  transform: translateY(4px);
 }
 
 .investigation-hotspot:hover .hotspot-tooltip,
 .investigation-hotspot.is-selected .hotspot-tooltip {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+.investigation-hotspot:hover .hotspot-tooltip.align-right,
+.investigation-hotspot.is-selected .hotspot-tooltip.align-right {
+  transform: translateY(0);
+}
+
+.investigation-hotspot:hover .hotspot-tooltip.align-left,
+.investigation-hotspot.is-selected .hotspot-tooltip.align-left {
+  transform: translateY(0);
 }
 
 .investigation-hotspot.is-selected {

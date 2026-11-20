@@ -1,15 +1,15 @@
-import { state } from './state.js?v=20261121_0835';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0835';
-import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_0835';
+import { state } from './state.js?v=20261121_0840';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0840';
+import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_0840';
 import {
   CODEX_CATEGORIES,
   CODEX_DATA,
   CLUE_RECIPES,
   INVENTORY_ITEMS
-} from './data/codexData.js?v=20261121_0835';
-import { MAP_TILES } from './isometricMap.js?v=20261121_0835';
+} from './data/codexData.js?v=20261121_0840';
+import { MAP_TILES } from './isometricMap.js?v=20261121_0840';
 
-export const CODE_BUILD_ID = '20261121_0835';
+export const CODE_BUILD_ID = '20261121_0840';
 const STORAGE_KEY = 'mystery_novel_author_data_v1';
 const STAT_FIELDS = [
   { id: 'magic', label: '마법' },

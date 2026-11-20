@@ -2,10 +2,10 @@
  * Narrative Branching Engine & Layton-Style Investigation Controller
  */
 
-import { state } from './state.js?v=20261121_0835';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0835';
-import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_0835';
-import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_0835';
+import { state } from './state.js?v=20261121_0840';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0840';
+import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_0840';
+import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_0840';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;',
@@ -2446,13 +2446,17 @@ export class GameEngine {
 
       const tooltipTitle = hs.type === 'character' ? (hs.characterName || hs.title) : hs.title;
       const tooltipAction = hs.type === 'character' ? '대화하기' : '조사하기';
+      const isRightEdge = hs.coords?.x > 75;
+      const isLeftEdge = hs.coords?.x < 25;
+      const alignClass = isRightEdge ? 'align-right' : (isLeftEdge ? 'align-left' : '');
 
       spot.innerHTML = `
         <span class="hotspot-pulse"></span>
         ${hotspotMarker}
-        <span class="hotspot-tooltip">
+        <span class="hotspot-tooltip ${alignClass}">
           <span class="hotspot-tooltip-title">${escapeHtml(tooltipTitle)} ${isCollected ? '<span class="status-checked">[완료]</span>' : ''}</span>
-          <span class="hotspot-tooltip-hint">👆 다시 탭하여 ${escapeHtml(tooltipAction)}</span>
+          <span class="hotspot-tooltip-hint-mobile">👆 다시 탭하여 ${escapeHtml(tooltipAction)}</span>
+          <span class="hotspot-tooltip-hint-desktop">클릭하여 ${escapeHtml(tooltipAction)}</span>
         </span>
       `;
 
@@ -2594,16 +2598,16 @@ export class GameEngine {
       subItemGranted = this.unlockSubItem(targetSubItemId);
     }
 
-    // 관찰문/상황설명 내 [세부타일: 대분류 | 이름 | 설명] 태그 자동 해금 검사
+    // 관찰문/상황설명 내 [세부타일: 대분류 | 이름 | 설명] 태그 자동 해금 검사 (중복 해금 방지)
     const textToCheck = `${hs.inspectText || ''} ${hs.unlockedText || ''}`;
     const subTileMatch = textToCheck.match(/\[(?:세부타일|소분류|SUBITEM|DETAIL_TILE)\s*:\s*(.+?)\]/i);
-    if (subTileMatch) {
+    if (subTileMatch && !subItemGranted) {
       const parts = subTileMatch[1].split('|').map((s) => s.trim());
       const parentName = parts[0];
       const subName = parts[1];
       const subDesc = parts[2] || '';
       const unlocked = this.unlockSubItem(subName, parentName, subDesc);
-      if (!subItemGranted && unlocked) {
+      if (unlocked) {
         subItemGranted = unlocked;
       }
     }
