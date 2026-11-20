@@ -702,7 +702,7 @@ export class GameEngine {
         }
 
         let charIdx = 0;
-        const speed = 28; // ms per char
+        const speed = 52; // ms per char (natural visual typing)
 
         el._twInterval = setInterval(() => {
           if (charIdx < allChars.length) {
@@ -721,27 +721,42 @@ export class GameEngine {
     const firstTwBlockIdx = allSequentialBlocks.findIndex((b) => getTypewriterTargetsInBlock(b).length > 0);
     if (firstTwBlockIdx === -1) return;
 
-    // Hide all blocks AFTER the first typewriter block until that typewriter completes!
+    // Smooth layout-preserving hide for subsequent blocks until active typewriter finishes
     for (let i = firstTwBlockIdx + 1; i < allSequentialBlocks.length; i++) {
       const b = allSequentialBlocks[i];
       b.dataset.twLockedHidden = 'true';
-      b.style.display = 'none';
       b.style.opacity = '0';
+      b.style.pointerEvents = 'none';
+      b.style.transform = 'translateY(6px)';
+      b.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
     }
 
     const revealBlockWithFade = (block) => {
       if (!block) return;
       if (block.dataset.twLockedHidden === 'true') {
         delete block.dataset.twLockedHidden;
-        block.style.display = '';
-        block.style.transition = 'opacity 0.32s ease, transform 0.32s ease';
-        block.style.transform = 'translateY(6px)';
-        requestAnimationFrame(() => {
-          block.style.opacity = '1';
-          block.style.transform = 'translateY(0)';
-        });
+        block.style.pointerEvents = '';
+        block.style.opacity = '1';
+        block.style.transform = 'translateY(0)';
       }
     };
+
+    // Fast-forward on user tap/click anywhere on story text
+    const skipAllTypewriters = (e) => {
+      if (e && e.target && e.target.closest('button, a, .story-choice-btn, .story-game-widget, input, select, .author-btn')) return;
+      allTwElements.forEach((el) => {
+        el._finishTyping?.();
+      });
+      allSequentialBlocks.forEach((b) => {
+        revealBlockWithFade(b);
+      });
+    };
+
+    if (container._twSkipHandler) {
+      container.removeEventListener('click', container._twSkipHandler);
+    }
+    container._twSkipHandler = skipAllTypewriters;
+    container.addEventListener('click', skipAllTypewriters);
 
     // Recursively process blocks from `startIndex`
     const runSequenceFrom = (startIndex) => {

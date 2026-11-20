@@ -2,16 +2,16 @@
  * Main Application Controller
  */
 
-import { state } from './state.js?v=20261121_0642';
-import { GameEngine } from './engine.js?v=20261121_0642';
-import { RotaryWheel } from './wheel.js?v=20261121_0642';
-import { HexBoard } from './hexBoard.js?v=20261121_0642';
-import { MemoBoard } from './memoBoard.js?v=20261121_0642';
-import { IsometricMap } from './isometricMap.js?v=20261121_0642';
-import { CODEX_CATEGORIES, CODEX_DATA, CLUE_RECIPES } from './data/codexData.js?v=20261121_0642';
-import { MAP_LOCATIONS, INVESTIGATION_SCENES } from './data/mapData.js?v=20261121_0642';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0642';
-import { AuthorEditor, applySavedAuthorData } from './authorEditor.js?v=20261121_0642';
+import { state } from './state.js?v=20261121_0655';
+import { GameEngine } from './engine.js?v=20261121_0655';
+import { RotaryWheel } from './wheel.js?v=20261121_0655';
+import { HexBoard } from './hexBoard.js?v=20261121_0655';
+import { MemoBoard } from './memoBoard.js?v=20261121_0655';
+import { IsometricMap } from './isometricMap.js?v=20261121_0655';
+import { CODEX_CATEGORIES, CODEX_DATA, CLUE_RECIPES } from './data/codexData.js?v=20261121_0655';
+import { MAP_LOCATIONS, INVESTIGATION_SCENES } from './data/mapData.js?v=20261121_0655';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_0655';
+import { AuthorEditor, applySavedAuthorData } from './authorEditor.js?v=20261121_0655';
 
 const AUTHOR_DATA_LOAD_RESULT = applySavedAuthorData();
 window.state = state;
@@ -393,11 +393,23 @@ class App {
       if (sumEl) sumEl.textContent = '노바리스 아카데미 입학식이 끝나고 기숙사로 향하는 길, 뜻밖의 룸메이트를 마주하게 됩니다.';
       if (contTitleEl) contTitleEl.textContent = '이야기 시작하기';
       if (contSubEl) contSubEl.textContent = '제1화 도입부부터 읽기';
-      if (newGameBtn) newGameBtn.style.display = 'none';
+      if (newGameBtn) {
+        newGameBtn.style.display = '';
+        const titleSpan = newGameBtn.querySelector('.btn-title');
+        const subSpan = newGameBtn.querySelector('.btn-subtext');
+        if (titleSpan) titleSpan.textContent = '제1화 새로 시작하기';
+        if (subSpan) subSpan.textContent = '처음 도입부부터 플레이';
+      }
       return;
     }
 
-    if (newGameBtn) newGameBtn.style.display = '';
+    if (newGameBtn) {
+      newGameBtn.style.display = '';
+      const titleSpan = newGameBtn.querySelector('.btn-title');
+      const subSpan = newGameBtn.querySelector('.btn-subtext');
+      if (titleSpan) titleSpan.textContent = '제1화부터 새로 시작하기';
+      if (subSpan) subSpan.textContent = '처음 도입부부터 다시 시작';
+    }
     if (tagEl) tagEl.textContent = '📍 최근 진행 위치';
     if (badgeEl) {
       badgeEl.textContent = '진행 중';
@@ -473,7 +485,7 @@ class App {
       (state.data?.collectedHotspots || []).length === 0;
 
     if (!isBeginning) {
-      const confirmed = window.confirm('진행 데이터를 처음 상태로 되돌리고 제1화 도입부부터 새로 시작하시겠습니까?');
+      const confirmed = window.confirm('진행 데이터를 처음 상태로 되돌리고 제1화 도입부부터 새로 시작하시겠습니까?\n(작가 편집 모드에서 저장한 장면과 설정은 안전하게 보존됩니다)');
       if (!confirmed) return;
     }
 

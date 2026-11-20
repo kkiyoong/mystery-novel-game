@@ -477,91 +477,101 @@ a, button, [role="button"], .hotspot-pin, .iso-tile {
   letter-spacing: 0.02em;
 }
 
-/* 3. Mystical Glowing Aura Text (글씨 자체에 빛 맴도는 신비한 효과: 박스 없이 글자체에서 직접 은은하고 신비롭게 뿜어져 나오는 빛무리 효과) */
+/* 3. Mystical Glowing Aura Text (선명하고 신비롭게 빛나는 마법 텍스트 아우라) */
 .novel-glow-text {
   position: relative;
-  display: inline;
-  color: #111827 !important; /* 선명하고 가독성 높은 폰트 본체 */
+  display: inline-block;
   font-weight: 800;
-  padding: 0 !important;
-  margin: 0 !important;
-  border-radius: 0 !important;
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
   vertical-align: baseline;
-  transition: text-shadow 0.3s ease;
-  animation: textAuraPulseGold 2.5s ease-in-out infinite alternate;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin: 2px 0;
+  line-height: 1.6;
+  transition: all 0.3s ease;
 }
 
 /* Default & Gold Aura (오파츠/황금빛 빛무리) */
 .novel-glow-text,
 .novel-glow-text.novel-glow-gold {
-  color: #111827 !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  text-shadow:
-    0 0 3px rgba(254, 240, 138, 1),
-    0 0 8px rgba(245, 158, 11, 0.85),
-    0 0 16px rgba(217, 119, 6, 0.6),
-    0 0 24px rgba(251, 191, 36, 0.35);
+  color: #92400e !important;
+  background: rgba(251, 191, 36, 0.18) !important;
+  border: 1px solid rgba(245, 158, 11, 0.5) !important;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.3) !important;
+  text-shadow: 0 0 3px rgba(254, 240, 138, 0.8), 0 0 8px rgba(245, 158, 11, 0.6);
+  animation: textAuraPulseGold 2.5s ease-in-out infinite alternate;
 }
 
 /* Blue / Mana Aura (푸른 마력 빛무리) */
 .novel-glow-text.novel-glow-blue {
-  color: #111827 !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  text-shadow:
-    0 0 3px rgba(186, 230, 253, 1),
-    0 0 8px rgba(56, 189, 248, 0.85),
-    0 0 16px rgba(14, 165, 233, 0.6),
-    0 0 24px rgba(56, 189, 248, 0.35);
+  color: #0369a1 !important;
+  background: rgba(56, 189, 248, 0.18) !important;
+  border: 1px solid rgba(14, 165, 233, 0.5) !important;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.3) !important;
+  text-shadow: 0 0 3px rgba(186, 230, 253, 0.8), 0 0 8px rgba(56, 189, 248, 0.6);
   animation-name: textAuraPulseBlue;
 }
 
 /* Purple / Sorcery Aura (보라 마법 빛무리) */
 .novel-glow-text.novel-glow-purple {
-  color: #111827 !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  text-shadow:
-    0 0 3px rgba(233, 213, 255, 1),
-    0 0 8px rgba(192, 132, 252, 0.85),
-    0 0 16px rgba(168, 85, 247, 0.6),
-    0 0 24px rgba(192, 132, 252, 0.35);
+  color: #7e22ce !important;
+  background: rgba(192, 132, 252, 0.18) !important;
+  border: 1px solid rgba(168, 85, 247, 0.5) !important;
+  box-shadow: 0 0 14px rgba(192, 132, 252, 0.3) !important;
+  text-shadow: 0 0 3px rgba(233, 213, 255, 0.8), 0 0 8px rgba(192, 132, 252, 0.6);
   animation-name: textAuraPulsePurple;
 }
 
 /* Red / Danger Aura (붉은 경고 빛무리) */
 .novel-glow-text.novel-glow-red {
-  color: #111827 !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  text-shadow:
-    0 0 3px rgba(254, 202, 202, 1),
-    0 0 8px rgba(248, 113, 113, 0.85),
-    0 0 16px rgba(239, 68, 68, 0.6),
-    0 0 24px rgba(248, 113, 113, 0.35);
+  color: #b91c1c !important;
+  background: rgba(248, 113, 113, 0.18) !important;
+  border: 1px solid rgba(239, 68, 68, 0.5) !important;
+  box-shadow: 0 0 14px rgba(248, 113, 113, 0.3) !important;
+  text-shadow: 0 0 3px rgba(254, 202, 202, 0.8), 0 0 8px rgba(248, 113, 113, 0.6);
   animation-name: textAuraPulseRed;
 }
 
 /* Green / Ancient Aura (초록 생명 빛무리) */
 .novel-glow-text.novel-glow-green {
-  color: #111827 !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  text-shadow:
-    0 0 3px rgba(187, 247, 208, 1),
-    0 0 8px rgba(74, 222, 128, 0.85),
-    0 0 16px rgba(34, 197, 94, 0.6),
-    0 0 24px rgba(74, 222, 128, 0.35);
+  color: #15803d !important;
+  background: rgba(74, 222, 128, 0.18) !important;
+  border: 1px solid rgba(34, 197, 94, 0.5) !important;
+  box-shadow: 0 0 14px rgba(74, 222, 128, 0.3) !important;
+  text-shadow: 0 0 3px rgba(187, 247, 208, 0.8), 0 0 8px rgba(74, 222, 128, 0.6);
   animation-name: textAuraPulseGreen;
+}
+
+/* Dark Theme Overrides for Glowing Aura */
+body.theme-dark .novel-glow-text,
+body.theme-dark .novel-glow-text.novel-glow-gold {
+  color: #fef08a !important;
+  background: rgba(251, 191, 36, 0.22) !important;
+  border-color: rgba(245, 158, 11, 0.7) !important;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.5) !important;
+}
+body.theme-dark .novel-glow-text.novel-glow-blue {
+  color: #bae6fd !important;
+  background: rgba(56, 189, 248, 0.22) !important;
+  border-color: rgba(56, 189, 248, 0.7) !important;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.5) !important;
+}
+body.theme-dark .novel-glow-text.novel-glow-purple {
+  color: #f3e8ff !important;
+  background: rgba(192, 132, 252, 0.22) !important;
+  border-color: rgba(192, 132, 252, 0.7) !important;
+  box-shadow: 0 0 16px rgba(192, 132, 252, 0.5) !important;
+}
+body.theme-dark .novel-glow-text.novel-glow-red {
+  color: #fecaca !important;
+  background: rgba(248, 113, 113, 0.22) !important;
+  border-color: rgba(248, 113, 113, 0.7) !important;
+  box-shadow: 0 0 16px rgba(248, 113, 113, 0.5) !important;
+}
+body.theme-dark .novel-glow-text.novel-glow-green {
+  color: #bbf7d0 !important;
+  background: rgba(74, 222, 128, 0.22) !important;
+  border-color: rgba(74, 222, 128, 0.7) !important;
+  box-shadow: 0 0 16px rgba(74, 222, 128, 0.5) !important;
 }
 
 @keyframes textAuraPulseGold {
@@ -662,15 +672,16 @@ a, button, [role="button"], .hotspot-pin, .iso-tile {
 }
 
 .novel-typewriter-cursor {
-  display: inline;
+  display: inline-block;
   color: var(--accent-gold, #f59e0b);
-  font-weight: 700;
-  margin-left: 1px;
-  margin-right: 1px;
+  font-weight: 800;
+  margin-left: 2px;
+  margin-right: 2px;
   animation: twCursorBlink 0.65s infinite;
   user-select: none;
   pointer-events: none;
-  text-shadow: 0 0 8px rgba(245, 158, 11, 0.85);
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.95);
+  vertical-align: baseline;
 }
 
 @keyframes twCursorBlink {
