@@ -97,7 +97,6 @@ export const MAP_LOCATIONS = [
       "y": 55
     },
     "unlocked": true,
-    "isCurrent": true,
     "hasInvestigation": false,
     "targetStoryNode": "story_1795161633215",
     "description": "아카데미 중앙 본관. 약초학 강의실에서 퀴즈의 답을 맞출 수 있습니다."

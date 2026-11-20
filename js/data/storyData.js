@@ -244,9 +244,7 @@ export const STORY_NODES = {
       },
       {
         "text": "연구동",
-        "nextNode": "ep1_pocket_intro",
-        "isInvestigationTrigger": true,
-        "locationId": "loc_lab",
+        "nextNode": "story_1795202607078",
         "desc": "연구실에 가면 새로운 정보를 찾을 수 있을지도.",
         "hideIfChosen": false
       },
@@ -306,7 +304,7 @@ export const STORY_NODES = {
     "choices": [
       {
         "text": "정원을 살펴본다.",
-        "nextNode": "ep1_pocket_intro",
+        "nextNode": "story_1795192473432",
         "isInvestigationTrigger": true,
         "locationId": "loc_garden",
         "hideIfChosen": false
@@ -352,7 +350,7 @@ export const STORY_NODES = {
     "choices": [
       {
         "text": "책을 읽어보자.",
-        "nextNode": "ep1_pocket_intro",
+        "nextNode": "story_1795192473432",
         "isInvestigationTrigger": true,
         "locationId": "loc_library",
         "effects": {
@@ -380,7 +378,7 @@ export const STORY_NODES = {
     "choices": [
       {
         "text": "손전등을 꺼낸다.",
-        "nextNode": "ep1_pocket_intro",
+        "nextNode": "story_1795192473432",
         "desc": "버튼을 누르니 빛이 났지? 한 번 써볼까.",
         "isInvestigationTrigger": true,
         "locationId": "loc_nebula",
@@ -432,11 +430,11 @@ export const STORY_NODES = {
       },
       {
         "text": "반딧불이 물약이 뭐예요?",
-        "nextNode": "ep1_pocket_intro"
+        "nextNode": "story_1795185391071"
       },
       {
         "text": "학교 식당에서 제일 맛있는 메뉴는 뭐예요?",
-        "nextNode": "ep1_pocket_intro"
+        "nextNode": "story_1795180742741"
       }
     ]
   },
@@ -530,7 +528,7 @@ export const STORY_NODES = {
         "text": "학교 식당에서 제일 맛있는 메뉴는 뭐예요?",
         "desc": "",
         "hideIfChosen": true,
-        "nextNode": "ep1_pocket_intro",
+        "nextNode": "story_1795180742741",
         "effects": {
           "rewardStat": {
             "social": 1,
@@ -576,7 +574,7 @@ export const STORY_NODES = {
     "choices": [
       {
         "text": "자세히 살펴본다.",
-        "nextNode": "ep1_pocket_intro",
+        "nextNode": "story_1795192473432",
         "hideIfChosen": false,
         "isInvestigationTrigger": true,
         "locationId": "loc_lab"
