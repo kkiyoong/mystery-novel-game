@@ -768,6 +768,8 @@ export class GameEngine {
             }
             const targetEl = twTargets[tIdx];
             const triggerTarget = () => {
+              if (targetEl._hasTriggered) return;
+              targetEl._hasTriggered = true;
               targetEl._startTyping(() => {
                 runTargetsInOrder(tIdx + 1);
               });
@@ -782,10 +784,12 @@ export class GameEngine {
                   }
                 });
               }, {
-                threshold: 0.05,
-                rootMargin: '0px 0px -10px 0px'
+                threshold: 0.01,
+                rootMargin: '120px 0px 120px 0px'
               });
               observer.observe(targetEl);
+              // Safety fallback: if offscreen or observer delayed, auto-trigger after 800ms so story never blocks
+              setTimeout(triggerTarget, 800);
             } else {
               triggerTarget();
             }
@@ -2874,6 +2878,14 @@ export class GameEngine {
       }, delay);
       this.messengerRevealTimers.push(timer);
     });
+  }
+
+  bindInlineStoryWidgets(container) {
+    if (!container) return;
+    this.initNovelTypewriters?.(container);
+    this.initStoryQuizzes?.(container);
+    this.initStoryExplanationWidgets?.(container);
+    this.initItemAcquisitionWidgets?.(container);
   }
 
   renderDialogueStep() {
