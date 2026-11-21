@@ -51,7 +51,10 @@ const DEFAULT_STATE = {
     letterSpacing: 0,
     theme: 'sepia'
   },
-  history: ['ep1_pocket_intro']
+  history: ['ep1_pocket_intro'],
+  // 회차 진행 정보 (회차 데이터와 분리되어 모든 회차에서 유지됨)
+  completedEpisodes: [],
+  schemaVersion: 2
 };
 
 class GameState {
@@ -80,6 +83,12 @@ class GameState {
           lastActiveMode,
           lastActiveNodeId,
           lastActiveLocationId,
+          // 구버전 저장 데이터 마이그레이션: 진행 상황은 유지하고 새 필드만 보강
+          schemaVersion: 2,
+          currentEpisodeId: typeof parsed.currentEpisodeId === 'string' ? parsed.currentEpisodeId : DEFAULT_STATE.currentEpisodeId,
+          completedEpisodes: Array.isArray(parsed.completedEpisodes)
+            ? parsed.completedEpisodes.filter((id) => typeof id === 'string')
+            : [],
           hasPocket,
           hasOpenedPocket: Object.prototype.hasOwnProperty.call(parsed, 'hasOpenedPocket')
             ? Boolean(parsed.hasOpenedPocket)
@@ -176,6 +185,37 @@ class GameState {
 
   getCurrentNodeId() {
     return this.data.currentNodeId;
+  }
+
+  // --- Episodes (회차 진행 상태: 아이템/단서/스탯은 data 하나로 유지되며 회차 변경 시 초기화되지 않음) ---
+
+  getCurrentEpisodeId() {
+    return this.data.currentEpisodeId || 'ep1';
+  }
+
+  setCurrentEpisodeId(episodeId) {
+    if (!episodeId) return;
+    this.data.currentEpisodeId = episodeId;
+    this.save();
+    this.emit('episodeChanged', episodeId);
+  }
+
+  getCompletedEpisodes() {
+    return this.data.completedEpisodes || [];
+  }
+
+  isEpisodeCompleted(episodeId) {
+    return this.getCompletedEpisodes().includes(episodeId);
+  }
+
+  setEpisodeCompleted(episodeId, completed = true) {
+    if (!episodeId) return;
+    const list = this.getCompletedEpisodes().filter((id) => id !== episodeId);
+    if (completed) list.push(episodeId);
+    this.data.completedEpisodes = list;
+    this.save();
+    this.emit('episodeCompleted', { episodeId, completed });
+    this.emit('change', this.data);
   }
 
   getHistory() {

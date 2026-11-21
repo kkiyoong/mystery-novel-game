@@ -1,13 +1,21 @@
-import { state } from './state.js?v=20261121_1440';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1440';
-import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_1440';
+import { state } from './state.js?v=20261121_1900';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1900';
+import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_1900';
 import {
   CODEX_CATEGORIES,
   CODEX_DATA,
   CLUE_RECIPES,
   INVENTORY_ITEMS
-} from './data/codexData.js?v=20261121_1440';
-import { MAP_TILES } from './isometricMap.js?v=20261121_1440';
+} from './data/codexData.js?v=20261121_1900';
+import { MAP_TILES } from './isometricMap.js?v=20261121_1900';
+import { EPISODE_DATA } from './data/mapData.js?v=20261121_1900';
+import {
+  syncLiveToEpisode,
+  loadEpisodeToLive,
+  createEpisodeData,
+  getLiveEpisodeId,
+  initEpisodeStore
+} from './data/episodeStore.js?v=20261121_1900';
 
 export const CODE_BUILD_ID = '20261121_1440';
 const STORAGE_KEY = 'mystery_novel_author_data_v1';
@@ -78,7 +86,10 @@ const actionButton = (label, action, className = '') => `
 
 function dataSnapshot() {
   ensureMainBuildingData();
+  syncLiveToEpisode();
   return {
+    liveEpisodeId: getLiveEpisodeId(),
+    episodeData: clone(EPISODE_DATA),
     version: 1,
     buildId: CODE_BUILD_ID,
     savedAt: new Date().toISOString(),
@@ -295,6 +306,7 @@ function applyData(data) {
   replaceArray(CODEX_DATA, data.codexData);
   replaceObject(CLUE_RECIPES, data.clueRecipes);
   replaceArray(INVENTORY_ITEMS, data.inventoryItems);
+  replaceObject(EPISODE_DATA, isRecord(data.episodeData) ? clone(data.episodeData) : {});
   syncAllItemsFromData(STORY_NODES, INVESTIGATION_SCENES, INVENTORY_ITEMS);
   ensureMainBuildingData();
 }
@@ -404,7 +416,7 @@ async function writeToDirectoryHandle(dirHandle, data) {
   if (data.mapLocations && data.investigationScenes) {
     const mapHandle = await dataDir.getFileHandle('mapData.js', { create: true });
     const writable = await mapHandle.createWritable();
-    const content = `/**\n * Map and Investigation Scene Data\n * Updated via Author Editor\n */\n\nexport const MAP_LOCATIONS = ${JSON.stringify(data.mapLocations, null, 2)};\n\nexport const INVESTIGATION_SCENES = ${JSON.stringify(data.investigationScenes, null, 2)};\n`;
+    const content = `/**\n * Map and Investigation Scene Data\n * Updated via Author Editor\n */\n\nexport const MAP_LOCATIONS = ${JSON.stringify(data.mapLocations, null, 2)};\n\nexport const INVESTIGATION_SCENES = ${JSON.stringify(data.investigationScenes, null, 2)};\n\nexport const EPISODE_DATA = ${JSON.stringify(data.episodeData || {}, null, 2)};\n`;
     await writable.write(content);
     await writable.close();
   }
@@ -438,8 +450,9 @@ async function writeToDirectoryHandle(dirHandle, data) {
 }
 
 export class AuthorEditor {
-  constructor({ onDataChanged, onTestStory, loadError = null }) {
+  constructor({ onDataChanged, onTestStory, onClose, loadError = null }) {
     this.onDataChanged = onDataChanged;
+    this.onClose = onClose;
     this.onTestStory = onTestStory;
     this.activeTab = 'story';
     this.selectedStoryNodeId = Object.keys(STORY_NODES)[0] || '';
@@ -627,6 +640,8 @@ export class AuthorEditor {
     this.flushPersist();
     this.panel?.classList.add('hidden');
     this.toggleButton?.setAttribute('aria-expanded', 'false');
+    // 편집기에서 보던 회차와 게임 진행 회차가 다를 수 있으므로 게임 회차 데이터로 복원
+    this.onClose?.();
   }
 
   setStatus(message, isError = false) {
@@ -946,12 +961,77 @@ export class AuthorEditor {
       memo: () => this.renderMemo(),
       inventory: () => this.renderInventory()
     };
-    this.content.innerHTML = renderers[this.activeTab]();
+    this.content.innerHTML = this.renderEpisodeBar() + renderers[this.activeTab]();
     this.panel?.querySelectorAll('[data-author-tab]').forEach((tab) => {
       const active = tab.dataset.authorTab === this.activeTab;
       tab.classList.toggle('is-active', active);
       tab.setAttribute('aria-selected', String(active));
     });
+  }
+
+  renderEpisodeBar() {
+    const ids = Object.keys(STORY_EPISODES);
+    const current = getLiveEpisodeId() || ids[0];
+    const options = ids.map((id) => `<option value="${escapeHtml(id)}" ${id === current ? 'selected' : ''}>${escapeHtml(STORY_EPISODES[id].title || id)}</option>`).join('');
+    return `
+      <div class="author-episode-bar">
+        <label class="author-episode-label">📚 편집할 회차
+          <select data-author-field="editorEpisodeSelect" aria-label="편집할 회차 선택">${options}</select>
+        </label>
+        ${actionButton('+ 새 회차 추가', 'add-episode', 'is-primary')}
+        <span class="author-episode-hint">선택한 회차의 본문 · 선택지 · 지도 · 조사 지점 · 인물 설정만 수정됩니다. 다른 회차는 영향받지 않습니다.</span>
+      </div>`;
+  }
+
+  switchEpisode(episodeId) {
+    if (!STORY_EPISODES[episodeId]) return;
+    syncLiveToEpisode();
+    loadEpisodeToLive(episodeId);
+    const episode = STORY_EPISODES[episodeId];
+    const nodes = Object.values(STORY_NODES).filter((node) => node.episodeId === episodeId);
+    this.selectedStoryNodeId = (nodes.find((node) => node.id === episode.startNode) || nodes[0])?.id || this.selectedStoryNodeId;
+    this.selectedCharacterId = CODEX_DATA.find((item) => item.category === 'character')?.id || '';
+    this.selectedLocationId = MAP_LOCATIONS[0]?.id || '';
+    this.selectedInvestigationSceneId = Object.keys(INVESTIGATION_SCENES)[0] || '';
+    this.selectedHotspotIndex = 0;
+    this.render();
+    this.setStatus(`[${episode.title || episodeId}] 편집 중 — 이 회차의 데이터만 수정됩니다.`);
+    this.schedulePersist();
+  }
+
+  addEpisode() {
+    syncLiveToEpisode();
+    const ids = Object.keys(STORY_EPISODES);
+    let n = ids.length + 1;
+    let id = `ep${n}`;
+    while (STORY_EPISODES[id]) {
+      n += 1;
+      id = `ep${n}`;
+    }
+    const nodeId = `${id}_start_${Date.now()}`;
+    STORY_EPISODES[id] = {
+      id,
+      title: `제${n}화. 새 회차`,
+      chapter: '제1장',
+      startNode: nodeId,
+      hubNode: nodeId
+    };
+    STORY_NODES[nodeId] = {
+      id: nodeId,
+      episodeId: id,
+      title: '새 회차 시작',
+      chapter: '제1장',
+      locationName: '장소 이름',
+      summary: '이 회차의 첫 장면 요약을 입력하세요.',
+      paragraphs: ['새 회차의 본문을 입력하세요.'],
+      choices: []
+    };
+    // 현재 편집 중인 회차의 지도/조사/인물을 복사하여 독립된 새 객체로 생성
+    createEpisodeData(id, getLiveEpisodeId());
+    this.switchEpisode(id);
+    this.persist();
+    this.render();
+    this.saveToDisk();
   }
 
   handleClick(event) {
@@ -1000,6 +1080,7 @@ export class AuthorEditor {
     }
     else if (action === 'export') this.exportData();
     else if (action === 'import') this.fileInput?.click();
+    else if (action === 'add-episode') this.addEpisode();
     else if (action === 'add-story-node') this.addStoryNode();
     else if (action === 'delete-story-node') this.deleteStoryNode();
     else if (action === 'test-story-node') {
@@ -2199,6 +2280,11 @@ export class AuthorEditor {
       return;
     }
 
+    if (name === 'editorEpisodeSelect') {
+      this.switchEpisode(value);
+      return;
+    }
+
     if (name === 'characterSearch') {
       this.filterCharacterRoster(value);
       return;
@@ -2262,6 +2348,11 @@ export class AuthorEditor {
 
   updateField(control, value, isTextTyping = false) {
     const name = control.dataset.authorField;
+    if (name === 'storyCompletesEpisode') {
+      const target = STORY_NODES[this.selectedStoryNodeId];
+      if (target) target.completesEpisode = Boolean(value);
+      return false;
+    }
     if (name === 'episodeTitle' || name === 'storyNodeTitle' || name === 'storyChapter' ||
         name === 'storyLocationName' || name === 'storySummary' || name === 'storyParagraphs') {
       const node = STORY_NODES[this.selectedStoryNodeId];
@@ -2789,12 +2880,17 @@ export class AuthorEditor {
   }
 
   renderStory() {
-    const node = STORY_NODES[this.selectedStoryNodeId] || STORY_NODES[Object.keys(STORY_NODES)[0]];
+    const editorEpisodeId = getLiveEpisodeId();
+    const episodeNodes = Object.values(STORY_NODES).filter((entry) => !editorEpisodeId || entry.episodeId === editorEpisodeId);
+    let node = STORY_NODES[this.selectedStoryNodeId];
+    if (!node || (editorEpisodeId && node.episodeId !== editorEpisodeId)) {
+      node = episodeNodes[0] || STORY_NODES[Object.keys(STORY_NODES)[0]];
+    }
     if (!node) return '<p>편집할 이야기가 없습니다.</p>';
     this.selectedStoryNodeId = node.id;
     const episode = STORY_EPISODES[node.episodeId] || {};
     const episodeGroups = new Map();
-    Object.values(STORY_NODES).forEach((entry) => {
+    episodeNodes.forEach((entry) => {
       const episodeId = entry.episodeId || 'unassigned';
       const chapter = entry.chapter || '장 구분 없음';
       if (!episodeGroups.has(episodeId)) episodeGroups.set(episodeId, new Map());
@@ -3004,6 +3100,7 @@ export class AuthorEditor {
             ${field('장면 제목', 'storyNodeTitle', node.title || '')}
             ${field('장·절 제목', 'storyChapter', node.chapter || '')}
             ${field('현위치 장소명 (홈 화면용)', 'storyLocationName', node.locationName || '')}
+            ${field('이 장면에 도달하면 회차 완료 처리', 'storyCompletesEpisode', Boolean(node.completesEpisode), 'checkbox')}
           </div>
           <div style="margin-top: 8px; margin-bottom: 12px;">
             <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #4338ca; font-weight: 700; cursor: pointer; background: #eef2ff; padding: 8px 12px; border-radius: 8px; border: 1.5px solid #c7d2fe;">
@@ -4002,6 +4099,7 @@ export class AuthorEditor {
           ${field('전신 일러스트 이미지 경로 (선택)', 'character:image', char.image || '', 'text', { attributes: 'placeholder="예: images/elena.png"' })}
           ${field('상세 소개 (성격, 배경 설정, 외모)', 'character:description', char.description || '', 'textarea', { attributes: 'rows="4" placeholder="인물의 성격과 과거 행적, 특징 등을 자세히 적어주세요."' })}
           ${field('관련 에피소드 ID', 'character:relatedEpisode', char.relatedEpisode || 'ep1')}
+          ${field('현재 위치 (이 회차 기준)', 'character:currentLocation', char.currentLocation || '', 'text', { attributes: 'placeholder="예: 도서관, 정원, 시계탑 테라스"' })}
           ${field('처음부터 도감에 공개', 'character:unlockedByDefault', Boolean(char.unlockedByDefault), 'checkbox')}
         </div>
 
@@ -4734,7 +4832,7 @@ export class AuthorEditor {
 
   addStoryNode() {
     const id = `story_${Date.now()}`;
-    const episodeId = Object.keys(STORY_EPISODES)[0] || 'ep1';
+    const episodeId = getLiveEpisodeId() || Object.keys(STORY_EPISODES)[0] || 'ep1';
     const firstTarget = Object.keys(STORY_NODES).find((nodeId) => nodeId !== this.selectedStoryNodeId) || '';
     STORY_NODES[id] = {
       id,
@@ -5613,6 +5711,7 @@ export class AuthorEditor {
     try {
       const parsed = JSON.parse(await file.text());
       applyData(parsed);
+      loadEpisodeToLive(getLiveEpisodeId() || Object.keys(STORY_EPISODES)[0]);
       this.selectedStoryNodeId = Object.keys(STORY_NODES)[0] || '';
       this.selectedLocationId = MAP_LOCATIONS[0]?.id || '';
       this.selectedMemoId = CODEX_DATA[0]?.id || '';

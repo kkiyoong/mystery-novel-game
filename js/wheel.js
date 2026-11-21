@@ -2,7 +2,7 @@
  * Interactive horizontal dock controller for the bottom pocket menu.
  */
 
-import { state } from './state.js?v=20261121_1440';
+import { state } from './state.js?v=20261121_1900';
 
 export const POCKET_ITEMS = [
   { id: 'codex', label: '메모', icon: '📖', subtitle: '단서 및 인물 도감' },

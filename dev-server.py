@@ -87,7 +87,8 @@ class GameHandler(http.server.SimpleHTTPRequestHandler):
                                 " * Updated via Author Editor\n"
                                 " */\n\n"
                                 f"export const MAP_LOCATIONS = {json.dumps(data['mapLocations'], ensure_ascii=False, indent=2)};\n\n"
-                                f"export const INVESTIGATION_SCENES = {json.dumps(data['investigationScenes'], ensure_ascii=False, indent=2)};\n"
+                                f"export const INVESTIGATION_SCENES = {json.dumps(data['investigationScenes'], ensure_ascii=False, indent=2)};\n\n"
+                                f"export const EPISODE_DATA = {json.dumps(data.get('episodeData', {}), ensure_ascii=False, indent=2)};\n"
                             )
                             with open(map_path, 'w', encoding='utf-8') as f:
                                 f.write(map_code)

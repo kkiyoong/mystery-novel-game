@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>아카데미생의 주머니는 이세계 오파츠 상점</title>
-  <link rel="stylesheet" href="css/style.css?v=20261121_1455">
+  <link rel="stylesheet" href="css/style.css?v=20261121_1900">
   <!-- Web Fonts for Korean story text and interface controls -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,6 +24,9 @@
       <div class="viewer-actions">
         <button type="button" id="btn-home-screen" class="btn-icon-label" title="홈 화면으로 이동" aria-label="홈 화면">
           🏠
+        </button>
+        <button type="button" id="btn-open-toc" class="btn-icon-label" title="회차 목록 (진행 중 / 완료됨)" aria-label="회차 목록">
+          📚
         </button>
         <button type="button" id="btn-sound-toggle" class="btn-icon-label" title="효과음 켜기/끄기" aria-label="효과음">
           🔊
@@ -142,6 +145,9 @@
           </button>
 
           <div class="home-sub-actions">
+            <button type="button" id="btn-home-episodes" class="home-sub-btn">
+              <span>📚 회차 목록</span>
+            </button>
             <button type="button" id="btn-home-settings" class="home-sub-btn">
               <span>⚙️ 독서 환경 설정</span>
             </button>
@@ -572,6 +578,6 @@
   <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <!-- Main ES6 Entry Point -->
-  <script type="module" src="js/app.js?v=20261121_1455"></script>
+  <script type="module" src="js/app.js?v=20261121_1900"></script>
 </body>
 </html>

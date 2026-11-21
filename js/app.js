@@ -2,18 +2,21 @@
  * Main Application Controller
  */
 
-import { state } from './state.js?v=20261121_1455';
-import { GameEngine } from './engine.js?v=20261121_1455';
-import { RotaryWheel } from './wheel.js?v=20261121_1455';
-import { HexBoard } from './hexBoard.js?v=20261121_1455';
-import { MemoBoard } from './memoBoard.js?v=20261121_1455';
-import { IsometricMap } from './isometricMap.js?v=20261121_1455';
-import { CODEX_CATEGORIES, CODEX_DATA, CLUE_RECIPES } from './data/codexData.js?v=20261121_1455';
-import { MAP_LOCATIONS, INVESTIGATION_SCENES } from './data/mapData.js?v=20261121_1455';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1455';
-import { AuthorEditor, applySavedAuthorData } from './authorEditor.js?v=20261121_1455';
+import { state } from './state.js?v=20261121_1900';
+import { GameEngine } from './engine.js?v=20261121_1900';
+import { RotaryWheel } from './wheel.js?v=20261121_1900';
+import { HexBoard } from './hexBoard.js?v=20261121_1900';
+import { MemoBoard } from './memoBoard.js?v=20261121_1900';
+import { IsometricMap } from './isometricMap.js?v=20261121_1900';
+import { CODEX_CATEGORIES, CODEX_DATA, CLUE_RECIPES } from './data/codexData.js?v=20261121_1900';
+import { MAP_LOCATIONS, INVESTIGATION_SCENES } from './data/mapData.js?v=20261121_1900';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1900';
+import { AuthorEditor, applySavedAuthorData } from './authorEditor.js?v=20261121_1900';
+import { initEpisodeStore, loadEpisodeToLive } from './data/episodeStore.js?v=20261121_1900';
 
 const AUTHOR_DATA_LOAD_RESULT = applySavedAuthorData();
+// 저장된 진행 회차에 맞는 지도 / 조사 / 인물 데이터를 불러옵니다.
+initEpisodeStore(state.getCurrentEpisodeId());
 window.state = state;
 window.CODEX_DATA = CODEX_DATA;
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -42,6 +45,7 @@ class App {
     this.isReaderSettingsOpen = false;
     this.isControlsHidden = false;
     this.authorEditor = null;
+    this.tocTab = 'active'; // 'active' (진행 중) | 'completed' (완료됨)
 
     this.init();
   }
@@ -117,6 +121,16 @@ class App {
           } else {
             this.engine.renderStoryNode(state.getCurrentNodeId());
           }
+        }
+      },
+      onClose: () => {
+        // 편집기에서 다른 회차를 보고 있었더라도 게임은 진행 중인 회차 데이터로 복원
+        loadEpisodeToLive(state.getCurrentEpisodeId());
+        this.refreshCurrentPanel();
+        if (state.getMode() === 'investigation') {
+          this.engine.startInvestigation(state.getCurrentLocationId());
+        } else if (state.getMode() === 'story') {
+          this.engine.renderStoryNode(state.getCurrentNodeId());
         }
       },
       onTestStory: (nodeId) => {
@@ -410,7 +424,7 @@ class App {
       if (titleSpan) titleSpan.textContent = '제1화부터 새로 시작하기';
       if (subSpan) subSpan.textContent = '처음 도입부부터 다시 시작';
     }
-    if (tagEl) tagEl.textContent = '📍 최근 진행 위치';
+    if (tagEl) tagEl.textContent = `📍 최근 진행 위치 · ${STORY_EPISODES[state.getCurrentEpisodeId()]?.title || ''}`.replace(/ · $/, '');
     if (badgeEl) {
       badgeEl.textContent = '진행 중';
       badgeEl.className = 'progress-badge';
@@ -490,6 +504,7 @@ class App {
     }
 
     state.reset();
+    loadEpisodeToLive(state.getCurrentEpisodeId());
     this.engine.showToast('새로운 모험이 시작됩니다!', 'success', '✨');
     this.resumeGame('ep1_pocket_intro');
   }
@@ -509,8 +524,42 @@ class App {
       backdrop.addEventListener('click', () => this.closeStoryToc());
     }
 
+    document.getElementById('btn-open-toc')?.addEventListener('click', () => this.openStoryToc());
+    document.getElementById('btn-home-episodes')?.addEventListener('click', () => this.openStoryToc());
+
     if (tocModal) {
       tocModal.addEventListener('click', (e) => {
+        const tabBtn = e.target.closest('[data-toc-tab]');
+        if (tabBtn) {
+          this.tocTab = tabBtn.dataset.tocTab === 'completed' ? 'completed' : 'active';
+          this.renderStoryToc();
+          this.engine.playAudio('click');
+          return;
+        }
+        const completeBtn = e.target.closest('[data-complete-episode]');
+        if (completeBtn) {
+          const epId = completeBtn.dataset.completeEpisode;
+          state.setEpisodeCompleted(epId, true);
+          this.engine.showToast(`${STORY_EPISODES[epId]?.title || epId} 완료 처리되었습니다.`, 'success', '🏁');
+          this.tocTab = 'completed';
+          this.renderStoryToc();
+          return;
+        }
+        const reopenBtn = e.target.closest('[data-reopen-episode]');
+        if (reopenBtn) {
+          const epId = reopenBtn.dataset.reopenEpisode;
+          state.setEpisodeCompleted(epId, false);
+          this.tocTab = 'active';
+          this.renderStoryToc();
+          return;
+        }
+        const startBtn = e.target.closest('[data-start-episode]');
+        if (startBtn) {
+          const epId = startBtn.dataset.startEpisode;
+          this.closeStoryToc();
+          this.startEpisode(epId);
+          return;
+        }
         const jumpBtn = e.target.closest('[data-jump-node]');
         if (jumpBtn) {
           const nodeId = jumpBtn.dataset.jumpNode;
@@ -521,6 +570,22 @@ class App {
         }
       });
     }
+  }
+
+  startEpisode(episodeId) {
+    const episode = STORY_EPISODES[episodeId];
+    if (!episode) return;
+    const startNode = episode.startNode && STORY_NODES[episode.startNode]
+      ? episode.startNode
+      : Object.values(STORY_NODES).find((node) => node.episodeId === episodeId)?.id;
+    if (!startNode) {
+      this.engine.showToast('이 회차에는 시작 장면이 없습니다.', 'info', '⚠️');
+      return;
+    }
+    // 아이템 · 단서 · 스탯 · 완료 목록은 state 하나로 유지되므로 회차를 바꿔도 초기화되지 않습니다.
+    state.setCurrentEpisodeId(episodeId);
+    loadEpisodeToLive(episodeId);
+    this.resumeGame(startNode);
   }
 
   openStoryToc() {
@@ -557,15 +622,36 @@ class App {
       chapterGroups.get(ch).push(node);
     });
 
-    let html = '';
+    const completedEpisodes = state.getCompletedEpisodes();
+    const currentEpisodeId = state.getCurrentEpisodeId();
+    const activeTab = this.tocTab === 'completed' ? 'completed' : 'active';
+    const completedCount = Array.from(episodeGroups.keys()).filter((id) => completedEpisodes.includes(id)).length;
+    const activeCount = episodeGroups.size - completedCount;
+
+    let html = `
+      <div class="episode-tabs" role="tablist" aria-label="회차 분류">
+        <button type="button" class="episode-tab ${activeTab === 'active' ? 'is-active' : ''}" data-toc-tab="active" role="tab" aria-selected="${activeTab === 'active'}">진행 중 <span class="episode-tab-count">${activeCount}</span></button>
+        <button type="button" class="episode-tab ${activeTab === 'completed' ? 'is-active' : ''}" data-toc-tab="completed" role="tab" aria-selected="${activeTab === 'completed'}">완료됨 <span class="episode-tab-count">${completedCount}</span></button>
+      </div>
+    `;
+    let renderedEpisodes = 0;
 
     episodeGroups.forEach((chapterGroups, epId) => {
+      const isDone = completedEpisodes.includes(epId);
+      if ((activeTab === 'completed') !== isDone) return;
+      renderedEpisodes += 1;
       const episode = STORY_EPISODES[epId] || { title: `회차 ${epId}` };
+      const episodeActions = isDone
+        ? `<button type="button" class="episode-action-btn" data-start-episode="${escapeHtml(epId)}">다시 읽기</button>
+           <button type="button" class="episode-action-btn is-subtle" data-reopen-episode="${escapeHtml(epId)}">↩ 진행 중으로 되돌리기</button>`
+        : `${epId === currentEpisodeId ? '<span class="episode-current-pill">📍 현재 진행 중</span>' : `<button type="button" class="episode-action-btn" data-start-episode="${escapeHtml(epId)}">▶ 이 회차 시작</button>`}
+           <button type="button" class="episode-action-btn is-subtle" data-complete-episode="${escapeHtml(epId)}">🏁 완료 처리</button>`;
       html += `
         <div class="toc-volume-block">
           <div class="toc-volume-header">
-            <span class="toc-tier-tag tier-tag-vol">대분류 · 회차</span>
+            <span class="toc-tier-tag tier-tag-vol">대분류 · 회차${isDone ? ' · 완료' : ''}</span>
             <h3 class="toc-volume-title">${escapeHtml(episode.title)}</h3>
+            <div class="episode-actions">${episodeActions}</div>
           </div>
           <div class="toc-volume-content">
       `;
@@ -642,6 +728,10 @@ class App {
         </div>
       `;
     });
+
+    if (renderedEpisodes === 0) {
+      html += `<p class="episode-empty">${activeTab === 'completed' ? '아직 완료한 회차가 없습니다.' : '진행 중인 회차가 없습니다.'}</p>`;
+    }
 
     tocBody.innerHTML = html;
   }

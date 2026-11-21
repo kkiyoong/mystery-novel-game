@@ -2,10 +2,11 @@
  * Narrative Branching Engine & Layton-Style Investigation Controller
  */
 
-import { state } from './state.js?v=20261121_1455';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1455';
-import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_1455';
-import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_1455';
+import { state } from './state.js?v=20261121_1900';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1900';
+import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_1900';
+import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_1900';
+import { loadEpisodeToLive } from './data/episodeStore.js?v=20261121_1900';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;',
@@ -244,6 +245,18 @@ export class GameEngine {
 
     if (node.grantsPocket) {
       state.setHasPocket(true);
+    }
+
+    // 회차 전환: 다른 회차의 장면으로 이동하면 그 회차의 지도/인물 데이터로 교체 (진행 상황은 유지)
+    if (node.episodeId && node.episodeId !== state.getCurrentEpisodeId()) {
+      state.setCurrentEpisodeId(node.episodeId);
+      loadEpisodeToLive(node.episodeId);
+    }
+
+    // 회차 완료 장면 도달 시 완료 처리
+    if (node.completesEpisode && node.episodeId && !state.isEpisodeCompleted(node.episodeId)) {
+      state.setEpisodeCompleted(node.episodeId, true);
+      this.showToast(`${STORY_EPISODES[node.episodeId]?.title || '회차'} 완료!`, 'success', '🏁');
     }
 
     if (this.storyView) {
