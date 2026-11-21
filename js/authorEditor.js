@@ -1241,11 +1241,23 @@ export class AuthorEditor {
     }
     else if (action === 'add-hotspot:book') this.addHotspot('book');
     else if (action === 'add-hotspot:item') this.addHotspot('item');
-    else if (action.startsWith('delete-hotspot:')) this.deleteHotspot(Number(action.split(':')[1]));
-    else if (action.startsWith('add-dialogue-option:')) this.addDialogueOption(Number(action.split(':')[1]));
+    else if (action.startsWith('delete-hotspot:')) {
+      const parts = action.split(':');
+      if (parts.length >= 3) this.deleteHotspot(Number(parts[2]), parts[1]);
+      else this.deleteHotspot(Number(parts[1]));
+    }
+    else if (action.startsWith('add-dialogue-option:')) {
+      const parts = action.split(':');
+      if (parts.length >= 3) this.addDialogueOption(Number(parts[2]), parts[1]);
+      else this.addDialogueOption(Number(parts[1]));
+    }
     else if (action.startsWith('delete-dialogue-option:')) {
       const parts = action.split(':');
-      this.deleteDialogueOption(Number(parts[1]), Number(parts[2]));
+      if (parts.length >= 4) {
+        this.deleteDialogueOption(Number(parts[2]), parts[3], parts[1]);
+      } else {
+        this.deleteDialogueOption(Number(parts[1]), parts[2]);
+      }
     }
     else if (action.startsWith('add-book-page:')) this.addBookPage(Number(action.split(':')[1]));
     else if (action.startsWith('delete-book-page:')) {
@@ -2395,6 +2407,16 @@ export class AuthorEditor {
     }
   }
 
+  getActiveSceneId(explicitSceneId = null) {
+    if (explicitSceneId && INVESTIGATION_SCENES[explicitSceneId]) {
+      return explicitSceneId;
+    }
+    if (this.activeTab === 'map') {
+      return this.selectedLocationId || this.selectedInvestigationSceneId || Object.keys(INVESTIGATION_SCENES)[0] || '';
+    }
+    return this.selectedInvestigationSceneId || this.selectedLocationId || Object.keys(INVESTIGATION_SCENES)[0] || '';
+  }
+
   handleField(event) {
     const control = event.target.closest('[data-author-field], [data-author-action^="move-"], [data-author-book-topic]');
     if (!control) return;
@@ -2674,7 +2696,7 @@ export class AuthorEditor {
       return false;
     }
     if (name.startsWith('investigationScene')) {
-      const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+      const sceneId = this.getActiveSceneId();
       const scene = INVESTIGATION_SCENES[sceneId];
       if (!scene) return false;
       if (name === 'investigationSceneTitle') scene.title = value;
@@ -2684,7 +2706,7 @@ export class AuthorEditor {
       return !isTextTyping && name === 'investigationSceneTitle';
     }
     if (name.startsWith('scene:')) {
-      const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+      const sceneId = this.getActiveSceneId();
       const scene = INVESTIGATION_SCENES[sceneId];
       if (!scene) return false;
       const key = name.split(':')[1];
@@ -2693,34 +2715,105 @@ export class AuthorEditor {
     }
     if (name.startsWith('dialogueOptionText:')) {
       const parts = name.split(':');
-      const hotspotIndex = Number(parts[1]);
-      const optionIndex = Number(parts[2]);
-      const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+      let sceneId, hotspotIndex, nodeKey;
+      if (parts.length >= 4) {
+        sceneId = parts[1];
+        hotspotIndex = Number(parts[2]);
+        nodeKey = parts[3];
+      } else {
+        sceneId = this.getActiveSceneId();
+        hotspotIndex = Number(parts[1]);
+        nodeKey = parts[2];
+      }
       const scene = INVESTIGATION_SCENES[sceneId];
       const hotspot = scene?.hotspots?.[hotspotIndex];
-      const opt = hotspot?.dialogueTree?.start?.options?.[optionIndex];
+      const opt = hotspot?.dialogueTree?.start?.options?.find((o) => o.nextNode === nodeKey)
+                  || hotspot?.dialogueTree?.start?.options?.[Number(nodeKey)];
       if (opt) opt.text = value;
       return false;
     }
     if (name.startsWith('dialogueAnswerText:')) {
       const parts = name.split(':');
-      const hotspotIndex = Number(parts[1]);
-      const optionIndex = Number(parts[2]);
-      const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+      let sceneId, hotspotIndex, nodeKey;
+      if (parts.length >= 4) {
+        sceneId = parts[1];
+        hotspotIndex = Number(parts[2]);
+        nodeKey = parts[3];
+      } else {
+        sceneId = this.getActiveSceneId();
+        hotspotIndex = Number(parts[1]);
+        nodeKey = parts[2];
+      }
       const scene = INVESTIGATION_SCENES[sceneId];
       const hotspot = scene?.hotspots?.[hotspotIndex];
-      const opt = hotspot?.dialogueTree?.start?.options?.[optionIndex];
-      if (opt && opt.nextNode && hotspot?.dialogueTree?.[opt.nextNode]) {
-        hotspot.dialogueTree[opt.nextNode].text = value;
+      const answerNode = hotspot?.dialogueTree?.[nodeKey]
+                         || (hotspot?.dialogueTree?.start?.options?.[Number(nodeKey)]?.nextNode
+                             && hotspot.dialogueTree[hotspot.dialogueTree.start.options[Number(nodeKey)].nextNode]);
+      if (answerNode) {
+        answerNode.text = value;
       }
       this.updateInlineWidgetPreview(control);
+      return false;
+    }
+    if (name.startsWith('dialogueReqStatKey:')) {
+      const parts = name.split(':');
+      let sceneId, hotspotIndex, nodeKey;
+      if (parts.length >= 4) {
+        sceneId = parts[1];
+        hotspotIndex = Number(parts[2]);
+        nodeKey = parts[3];
+      } else {
+        sceneId = this.getActiveSceneId();
+        hotspotIndex = Number(parts[1]);
+        nodeKey = parts[2];
+      }
+      const scene = INVESTIGATION_SCENES[sceneId];
+      const hotspot = scene?.hotspots?.[hotspotIndex];
+      const opt = hotspot?.dialogueTree?.start?.options?.find((o) => o.nextNode === nodeKey)
+                  || hotspot?.dialogueTree?.start?.options?.[Number(nodeKey)];
+      if (opt) {
+        if (!value) {
+          if (opt.condition?.stat) {
+            delete opt.condition.stat;
+            if (Object.keys(opt.condition).length === 0) delete opt.condition;
+          }
+        } else {
+          opt.condition = opt.condition || {};
+          const prevVal = opt.condition.stat ? Object.values(opt.condition.stat)[0] : 5;
+          opt.condition.stat = { [value]: Number(prevVal) || 5 };
+        }
+      }
+      return !isTextTyping;
+    }
+    if (name.startsWith('dialogueReqStatVal:')) {
+      const parts = name.split(':');
+      let sceneId, hotspotIndex, nodeKey;
+      if (parts.length >= 4) {
+        sceneId = parts[1];
+        hotspotIndex = Number(parts[2]);
+        nodeKey = parts[3];
+      } else {
+        sceneId = this.getActiveSceneId();
+        hotspotIndex = Number(parts[1]);
+        nodeKey = parts[2];
+      }
+      const scene = INVESTIGATION_SCENES[sceneId];
+      const hotspot = scene?.hotspots?.[hotspotIndex];
+      const opt = hotspot?.dialogueTree?.start?.options?.find((o) => o.nextNode === nodeKey)
+                  || hotspot?.dialogueTree?.start?.options?.[Number(nodeKey)];
+      if (opt) {
+        opt.condition = opt.condition || {};
+        const currentStatKey = opt.condition.stat ? Object.keys(opt.condition.stat)[0] : 'perception';
+        const num = Math.max(1, Number(value) || 1);
+        opt.condition.stat = { [currentStatKey]: num };
+      }
       return false;
     }
     if (name.startsWith('bookPageIndexTitle:')) {
       const parts = name.split(':');
       const hsIdx = Number(parts[1]);
       const pgIdx = Number(parts[2]);
-      const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+      const sceneId = this.getActiveSceneId();
       const scene = INVESTIGATION_SCENES[sceneId];
       if (scene?.hotspots?.[hsIdx]?.pages?.[pgIdx]) {
         scene.hotspots[hsIdx].pages[pgIdx].indexTitle = value;
@@ -2731,7 +2824,7 @@ export class AuthorEditor {
       const parts = name.split(':');
       const hsIdx = Number(parts[1]);
       const pgIdx = Number(parts[2]);
-      const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+      const sceneId = this.getActiveSceneId();
       const scene = INVESTIGATION_SCENES[sceneId];
       if (scene?.hotspots?.[hsIdx]?.pages?.[pgIdx]) {
         scene.hotspots[hsIdx].pages[pgIdx].pageTitle = value;
@@ -2742,7 +2835,7 @@ export class AuthorEditor {
       const parts = name.split(':');
       const hsIdx = Number(parts[1]);
       const pgIdx = Number(parts[2]);
-      const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+      const sceneId = this.getActiveSceneId();
       const scene = INVESTIGATION_SCENES[sceneId];
       if (scene?.hotspots?.[hsIdx]?.pages?.[pgIdx]) {
         scene.hotspots[hsIdx].pages[pgIdx].content = value;
@@ -2751,7 +2844,7 @@ export class AuthorEditor {
       return false;
     }
     if (name.startsWith('hotspot:')) {
-      const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+      const sceneId = this.getActiveSceneId();
       const scene = INVESTIGATION_SCENES[sceneId];
       const hotspot = scene?.hotspots?.[Number(control.dataset.hotspotIndex)];
       if (!hotspot) return false;
@@ -3730,10 +3823,10 @@ export class AuthorEditor {
                   <span>❓ 질문 및 답변 분기 목록 (${options.length}개)</span>
                 </strong>
                 <p style="margin: 2px 0 0 0; font-size: 11.5px; color: var(--text-muted);">
-                  플레이어가 인물에게 물어볼 질문(선택지)과 그에 대한 인물의 답변을 추가하고, 답변마다 단서 발견·세부설명·아이템 획득 등을 자유롭게 넣으세요.
+                  플레이어가 인물에게 물어볼 질문(선택지)과 그에 대한 인물의 답변을 추가하고, 스탯 제한(요구치) 및 답변마다 단서·세부설명·아이템 등을 자유롭게 넣으세요.
                 </p>
               </div>
-              ${actionButton('+ ❓ 새 질문 추가', `add-dialogue-option:${index}`, 'is-primary')}
+              ${actionButton('+ ❓ 새 질문 추가', `add-dialogue-option:${this.getActiveSceneId()}:${index}`, 'is-primary')}
             </div>
 
             ${options.length === 0 ? `
@@ -3744,22 +3837,49 @@ export class AuthorEditor {
             ` : `
               <div style="display: flex; flex-direction: column; gap: 12px;">
                 ${options.map((opt, optIdx) => {
-                  const answerNode = hotspot.dialogueTree?.[opt.nextNode] || {};
+                  const sceneId = this.getActiveSceneId();
+                  const nodeKey = opt.nextNode;
+                  const answerNode = hotspot.dialogueTree?.[nodeKey] || {};
+                  const statCond = opt.condition?.stat || {};
+                  const statKey = Object.keys(statCond)[0] || '';
+                  const statVal = statKey ? (statCond[statKey] ?? 5) : 5;
                   return `
                     <div style="padding: 14px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px;">
                       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <span style="font-size: 12px; font-weight: 800; color: #fde047; display: inline-flex; align-items: center; gap: 4px;">
                           <span>질문 ${optIdx + 1}</span>
-                          <span style="color: var(--text-muted); font-weight: normal; font-size: 11px;">(노드 키: ${escapeHtml(opt.nextNode)})</span>
+                          <span style="color: var(--text-muted); font-weight: normal; font-size: 11px;">(노드 키: ${escapeHtml(nodeKey)})</span>
                         </span>
-                        ${actionButton('이 질문 삭제', `delete-dialogue-option:${index}:${optIdx}`, 'is-danger')}
+                        ${actionButton('이 질문 삭제', `delete-dialogue-option:${sceneId}:${index}:${nodeKey}`, 'is-danger')}
                       </div>
                       <div style="display: flex; flex-direction: column; gap: 8px;">
                         <label class="author-field" style="margin: 0;">
                           <span style="font-size: 11.5px; font-weight: 600; color: #e2e8f0;">선택지 문장 (플레이어가 고를 질문)</span>
-                          <input type="text" data-author-field="dialogueOptionText:${index}:${optIdx}" value="${escapeHtml(opt.text || '')}" placeholder="예: 어젯밤 침입 사건에 대해 묻는다.">
+                          <input type="text" data-author-field="dialogueOptionText:${sceneId}:${index}:${nodeKey}" value="${escapeHtml(opt.text || '')}" placeholder="예: 어젯밤 침입 사건에 대해 묻는다.">
                         </label>
-                        ${this.renderRichTextareaField('💬 인물의 답변 대사 (선택 시 인물이 대답할 말 · 단서/세부설명/아이템 태그 지원)', `dialogueAnswerText:${index}:${optIdx}`, answerNode.text || '', {
+
+                        <!-- 스탯 조건 설정 -->
+                        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(165, 180, 252, 0.25); border-radius: 6px; padding: 8px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+                          <div style="font-size: 12px; font-weight: 700; color: #a5b4fc; display: flex; align-items: center; gap: 4px;">
+                            <span>🔒 질문 요구 스탯:</span>
+                          </div>
+                          <select data-author-field="dialogueReqStatKey:${sceneId}:${index}:${nodeKey}" style="padding: 4px 8px; font-size: 12px; background: #0f172a; color: #f8fafc; border: 1.5px solid rgba(165, 180, 252, 0.35); border-radius: 5px; font-weight: 600;">
+                            <option value="" ${!statKey ? 'selected' : ''}>(제한 없음 - 누구나 질문 가능)</option>
+                            <option value="perception" ${statKey === 'perception' ? 'selected' : ''}>👁️ 관찰력 (Perception)</option>
+                            <option value="knowledge" ${statKey === 'knowledge' ? 'selected' : ''}>📚 지식 (Knowledge)</option>
+                            <option value="social" ${statKey === 'social' ? 'selected' : ''}>💬 사교력 (Social)</option>
+                            <option value="magic" ${statKey === 'magic' ? 'selected' : ''}>✨ 마법 (Magic)</option>
+                            <option value="stamina" ${statKey === 'stamina' ? 'selected' : ''}>⚡ 체력 (Stamina)</option>
+                          </select>
+                          <div style="display: flex; align-items: center; gap: 6px; ${statKey ? '' : 'opacity: 0.4; pointer-events: none;'}">
+                            <span style="font-size: 12px; color: #e2e8f0; font-weight: 600;">요구 수치:</span>
+                            <input type="number" data-author-field="dialogueReqStatVal:${sceneId}:${index}:${nodeKey}" value="${statVal}" min="1" max="100" style="width: 65px; padding: 4px 6px; font-size: 12px; background: #0f172a; color: #f8fafc; border: 1.5px solid rgba(165, 180, 252, 0.35); border-radius: 5px; text-align: center; font-weight: 700;">
+                            <span style="font-size: 12px; color: #94a3b8;">이상 필요</span>
+                          </div>
+                          ${statKey ? `<span style="font-size: 11px; color: #fbbf24; margin-left: auto;">💡 플레이어의 스탯이 ${statVal} 미만이면 잠금(🔒) 상태로 표시됩니다.</span>` : ''}
+                        </div>
+
+                        ${this.renderRichTextareaField('💬 인물의 답변 대사 (선택 시 인물이 대답할 말 · 단서/세부설명/아이템 태그 지원)', `dialogueAnswerText:${sceneId}:${index}:${nodeKey}`, answerNode.text || '', {
                           rows: 3,
                           placeholder: '예: “자정에 서고 안쪽에서 결계 경보가 울렸어요……”'
                         })}
@@ -3925,6 +4045,9 @@ export class AuthorEditor {
     const location = MAP_LOCATIONS.find((entry) => entry.id === this.selectedLocationId) || MAP_LOCATIONS[0];
     if (!location) return '<p>편집할 장소가 없습니다.</p>';
     this.selectedLocationId = location.id;
+    if (INVESTIGATION_SCENES[location.id]) {
+      this.selectedInvestigationSceneId = location.id;
+    }
     const tile = MAP_TILES.find((entry) => entry.locationId === location.id);
     const scene = INVESTIGATION_SCENES[location.id];
     const slotOptions = this.availableEmptyTiles().map((entry) => ({
@@ -4003,34 +4126,58 @@ export class AuthorEditor {
             <div class="author-dialogue-tree-box" style="margin-top: 10px; padding: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(96, 165, 250, 0.3); border-radius: 8px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
                 <strong style="color: #60a5fa; font-size: 13px;">💬 인물과의 질문 / 탐문 선택지 목록</strong>
-                ${actionButton('+ 질문 추가', `add-dialogue-option:${index}`, 'is-primary')}
+                ${actionButton('+ 질문 추가', `add-dialogue-option:${location.id}:${index}`, 'is-primary')}
               </div>
-              ${((hotspot.dialogueTree?.start?.options || []).filter(o => o.nextNode !== 'exit').length === 0) ? `
+              ${((hotspot.dialogueTree?.start?.options || []).filter((o) => o.nextNode !== 'exit').length === 0) ? `
                 <p class="author-empty" style="font-size: 12px; margin: 4px 0 8px 0;">등록된 질문이 없습니다. [+ 질문 추가] 버튼으로 플레이어가 물어볼 수 있는 질문과 인물의 답변을 만드세요.</p>
               ` : `
                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                  ${(hotspot.dialogueTree?.start?.options || []).map((opt, optIdx) => {
-                    if (opt.nextNode === 'exit') return '';
-                    const answerNode = hotspot.dialogueTree?.[opt.nextNode] || {};
+                  ${(hotspot.dialogueTree?.start?.options || []).filter((o) => o.nextNode !== 'exit').map((opt, optIdx) => {
+                    const nodeKey = opt.nextNode;
+                    const answerNode = hotspot.dialogueTree?.[nodeKey] || {};
+                    const statCond = opt.condition?.stat || {};
+                    const statKey = Object.keys(statCond)[0] || '';
+                    const statVal = statKey ? (statCond[statKey] ?? 5) : 5;
                     return `
                       <div style="padding: 10px; background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                           <span style="font-size: 12px; font-weight: 700; color: #fde047;">❓ 질문 ${optIdx + 1}</span>
-                          ${actionButton('질문 삭제', `delete-dialogue-option:${index}:${optIdx}`, 'is-danger')}
+                          ${actionButton('질문 삭제', `delete-dialogue-option:${location.id}:${index}:${nodeKey}`, 'is-danger')}
                         </div>
-                        <label class="author-field" style="margin-bottom: 6px;">
-                          질문 문장 (플레이어 선택지)
-                          <input type="text" data-author-field="dialogueOptionText:${index}:${optIdx}" value="${escapeHtml(opt.text || '')}" placeholder="예: 어젯밤 상황에 대해 묻는다.">
-                        </label>
-                        ${this.renderRichTextareaField(
-                          '💬 인물의 답변 대사',
-                          `dialogueAnswerText:${index}:${optIdx}`,
-                          answerNode.text || '',
-                          {
-                            rows: 3,
-                            placeholder: '예: 자정에 갑자기 결계 경보가 울렸어요...'
-                          }
-                        )}
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                          <label class="author-field" style="margin-bottom: 6px;">
+                            <span style="font-size: 11px; font-weight: 600; color: #e2e8f0;">질문 문장 (플레이어 선택지)</span>
+                            <input type="text" data-author-field="dialogueOptionText:${location.id}:${index}:${nodeKey}" value="${escapeHtml(opt.text || '')}" placeholder="예: 어젯밤 상황에 대해 묻는다.">
+                          </label>
+
+                          <!-- 스탯 조건 설정 -->
+                          <div style="background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(165, 180, 252, 0.25); border-radius: 6px; padding: 6px 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+                            <span style="font-size: 11.5px; font-weight: 700; color: #a5b4fc;">🔒 요구 스탯:</span>
+                            <select data-author-field="dialogueReqStatKey:${location.id}:${index}:${nodeKey}" style="padding: 3px 6px; font-size: 11.5px; background: #0f172a; color: #f8fafc; border: 1px solid rgba(165, 180, 252, 0.35); border-radius: 4px; font-weight: 600;">
+                              <option value="" ${!statKey ? 'selected' : ''}>(제한 없음)</option>
+                              <option value="perception" ${statKey === 'perception' ? 'selected' : ''}>👁️ 관찰력</option>
+                              <option value="knowledge" ${statKey === 'knowledge' ? 'selected' : ''}>📚 지식</option>
+                              <option value="social" ${statKey === 'social' ? 'selected' : ''}>💬 사교력</option>
+                              <option value="magic" ${statKey === 'magic' ? 'selected' : ''}>✨ 마법</option>
+                              <option value="stamina" ${statKey === 'stamina' ? 'selected' : ''}>⚡ 체력</option>
+                            </select>
+                            <div style="display: flex; align-items: center; gap: 4px; ${statKey ? '' : 'opacity: 0.4; pointer-events: none;'}">
+                              <span style="font-size: 11px; color: #e2e8f0;">수치:</span>
+                              <input type="number" data-author-field="dialogueReqStatVal:${location.id}:${index}:${nodeKey}" value="${statVal}" min="1" max="100" style="width: 55px; padding: 3px 4px; font-size: 11.5px; background: #0f172a; color: #f8fafc; border: 1px solid rgba(165, 180, 252, 0.35); border-radius: 4px; text-align: center; font-weight: 700;">
+                              <span style="font-size: 11px; color: #94a3b8;">이상 필요</span>
+                            </div>
+                          </div>
+
+                          ${this.renderRichTextareaField(
+                            '💬 인물의 답변 대사',
+                            `dialogueAnswerText:${location.id}:${index}:${nodeKey}`,
+                            answerNode.text || '',
+                            {
+                              rows: 3,
+                              placeholder: '예: 자정에 갑자기 결계 경보가 울렸어요...'
+                            }
+                          )}
+                        </div>
                       </div>
                     `;
                   }).join('')}
@@ -5154,7 +5301,7 @@ export class AuthorEditor {
   }
 
   addHotspot(type = 'inspect', characterId = '') {
-    const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+    const sceneId = this.getActiveSceneId();
     const scene = INVESTIGATION_SCENES[sceneId];
     if (!scene) return;
     scene.hotspots ||= [];
@@ -5235,8 +5382,8 @@ export class AuthorEditor {
     this.setStatus(existingChar ? `[${existingChar.title}] 인물과의 대화 지점이 추가되었습니다.` : `[${newHs.title}] 지점이 추가되었습니다.`);
   }
 
-  deleteHotspot(index) {
-    const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+  deleteHotspot(index, explicitSceneId = null) {
+    const sceneId = this.getActiveSceneId(explicitSceneId);
     const scene = INVESTIGATION_SCENES[sceneId];
     if (!scene?.hotspots?.[index]) return;
     const title = scene.hotspots[index]?.title || `지점 ${index + 1}`;
@@ -5248,8 +5395,8 @@ export class AuthorEditor {
     this.setStatus(`[${title}] 지점을 삭제했습니다.`);
   }
 
-  addDialogueOption(hotspotIndex) {
-    const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+  addDialogueOption(hotspotIndex, explicitSceneId = null) {
+    const sceneId = this.getActiveSceneId(explicitSceneId);
     const scene = INVESTIGATION_SCENES[sceneId];
     const hotspot = scene?.hotspots?.[hotspotIndex];
     if (!hotspot) return;
@@ -5268,8 +5415,9 @@ export class AuthorEditor {
     hotspot.dialogueTree.start.options = hotspot.dialogueTree.start.options.filter((o) => o.nextNode !== 'exit');
 
     const nextNodeKey = `q_${Date.now()}`;
+    const questionCount = hotspot.dialogueTree.start.options.length + 1;
     const newOpt = {
-      text: `새로운 질문 ${hotspot.dialogueTree.start.options.length + 1}`,
+      text: `새로운 질문 ${questionCount}`,
       nextNode: nextNodeKey
     };
     hotspot.dialogueTree.start.options.push(newOpt);
@@ -5287,17 +5435,33 @@ export class AuthorEditor {
     this.persist();
     this.render();
     this.saveToDisk();
-    this.setStatus('새 질문과 답변이 추가되었습니다.');
+    this.setStatus(`[${hotspot.characterName || hotspot.title || '인물'}] 새 질문과 답변이 추가되었습니다.`);
   }
 
-  deleteDialogueOption(hotspotIndex, optionIndex) {
-    const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+  deleteDialogueOption(hotspotIndex, nodeKeyOrIdx, explicitSceneId = null) {
+    const sceneId = this.getActiveSceneId(explicitSceneId);
     const scene = INVESTIGATION_SCENES[sceneId];
     const hotspot = scene?.hotspots?.[hotspotIndex];
-    const opt = hotspot?.dialogueTree?.start?.options?.[optionIndex];
-    if (!opt) return;
-    const targetKey = opt.nextNode;
-    hotspot.dialogueTree.start.options.splice(optionIndex, 1);
+    if (!hotspot || !hotspot.dialogueTree?.start?.options) return;
+
+    let targetKey = null;
+    let idx = -1;
+
+    if (typeof nodeKeyOrIdx === 'string' && isNaN(Number(nodeKeyOrIdx))) {
+      idx = hotspot.dialogueTree.start.options.findIndex((o) => o.nextNode === nodeKeyOrIdx);
+      targetKey = nodeKeyOrIdx;
+    } else {
+      const numIdx = Number(nodeKeyOrIdx);
+      const opt = hotspot.dialogueTree.start.options[numIdx];
+      if (opt) {
+        idx = numIdx;
+        targetKey = opt.nextNode;
+      }
+    }
+
+    if (idx !== -1) {
+      hotspot.dialogueTree.start.options.splice(idx, 1);
+    }
     if (targetKey && targetKey !== 'exit' && targetKey !== 'start') {
       delete hotspot.dialogueTree[targetKey];
     }
@@ -5307,8 +5471,8 @@ export class AuthorEditor {
     this.setStatus('질문을 삭제했습니다.');
   }
 
-  addBookPage(hotspotIndex) {
-    const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+  addBookPage(hotspotIndex, explicitSceneId = null) {
+    const sceneId = this.getActiveSceneId(explicitSceneId);
     const scene = INVESTIGATION_SCENES[sceneId];
     const hotspot = scene?.hotspots?.[hotspotIndex];
     if (!hotspot) return;
@@ -5325,8 +5489,8 @@ export class AuthorEditor {
     this.setStatus(`[${hotspot.title}]에 새 페이지(${pageNum}쪽)가 추가되었습니다.`);
   }
 
-  deleteBookPage(hotspotIndex, pageIndex) {
-    const sceneId = this.selectedInvestigationSceneId || this.selectedLocationId;
+  deleteBookPage(hotspotIndex, pageIndex, explicitSceneId = null) {
+    const sceneId = this.getActiveSceneId(explicitSceneId);
     const scene = INVESTIGATION_SCENES[sceneId];
     const hotspot = scene?.hotspots?.[hotspotIndex];
     if (!hotspot?.pages?.[pageIndex]) return;

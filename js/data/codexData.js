@@ -331,38 +331,60 @@ export const CODEX_DATA = [
     ]
   },
   {
-    "id": "clue_muddy_footprints",
+    "id": "clue_topic_1795254079199",
     "category": "clue",
+    "role": "keyword",
     "title": "주머니...쥐?",
     "icon": "🐭",
-    "summary": "주머니에서 쥐가 나왔다.",
-    "description": "중고로 산 주머니에서 쥐가 튀어나왔다.\n얼떨결에 계약을 했지만...\n상태창? 아이템? 이게 다 뭐지?",
-    "keywords": [
-      "주머니"
-    ],
-    "relatedEpisode": "ep1",
-    "unlockedByDefault": true,
+    "summary": "주머니에서 쥐가 튀어나왔다. 상태창? 아이템? 이게 다 뭐지.",
+    "description": "상세 설명을 입력하세요.",
+    "keywords": [],
     "subItems": [
       {
-        "id": "clue_muddy_footprints_keyword_1",
-        "label": "상태창",
-        "sub": "키워드",
-        "desc": "상태창"
-      },
-      {
-        "id": "clue_muddy_footprints_keyword_2",
-        "label": "손전등",
-        "sub": "키워드",
-        "desc": "손전등"
-      },
-      {
-        "id": "clue_muddy_footprints_keyword_3",
+        "id": "clue_topic_1795254079199_sub_1795254131590",
         "label": "포랫",
-        "sub": "키워드",
-        "desc": "포랫",
-        "records": []
+        "sub": "세부 타일",
+        "desc": "주머니에서 튀어나온 말하는 쥐.",
+        "records": [
+          {
+            "id": "rec_1795254131590",
+            "title": "발견",
+            "text": "기록 내용"
+          }
+        ],
+        "unlockedByDefault": true
+      },
+      {
+        "id": "clue_topic_1795254079199_sub_1795254150073",
+        "label": "상태창",
+        "sub": "세부 타일",
+        "desc": "파란 창이 허공에 뜬다. 홀로...그램?",
+        "records": [
+          {
+            "id": "rec_1795254150073",
+            "title": "발견",
+            "text": "기록 내용"
+          }
+        ],
+        "unlockedByDefault": true
+      },
+      {
+        "id": "clue_topic_1795254079199_sub_1795254198762",
+        "label": "손전등",
+        "sub": "세부 타일",
+        "desc": "빛이 나는 막대. 이게 마법이 아니라니.",
+        "records": [
+          {
+            "id": "rec_1795254198762",
+            "title": "발견",
+            "text": "기록 내용"
+          }
+        ],
+        "unlockedByDefault": true
       }
-    ]
+    ],
+    "subClues": [],
+    "unlockedByDefault": true
   },
   {
     "id": "char_laiden",

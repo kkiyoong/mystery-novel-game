@@ -3289,7 +3289,7 @@ export class GameEngine {
         }
 
         btn.innerHTML = `
-          <span class="opt-bullet">💬</span>
+          <span class="opt-bullet">${evaluation.met ? '💬' : '🔒'}</span>
           <span class="opt-text">${escapeHtml(opt.text)}</span>
           ${!evaluation.met ? `<span class="opt-lock-hint">(${escapeHtml(evaluation.reason)})</span>` : ''}
         `;

@@ -19,6 +19,9 @@ const AUTHOR_DATA_LOAD_RESULT = applySavedAuthorData();
 initEpisodeStore(state.getCurrentEpisodeId());
 window.state = state;
 window.CODEX_DATA = CODEX_DATA;
+window.INVESTIGATION_SCENES = INVESTIGATION_SCENES;
+window.MAP_LOCATIONS = MAP_LOCATIONS;
+window.STORY_NODES = STORY_NODES;
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;',
   '<': '&lt;',

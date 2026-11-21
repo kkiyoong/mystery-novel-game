@@ -10,6 +10,13 @@ export const STORY_EPISODES = {
     "chapter": "제1장. 한밤중의 비상 소집",
     "startNode": "ep1_pocket_intro",
     "hubNode": "story_1795192473432"
+  },
+  "ep2": {
+    "id": "ep2",
+    "title": "제1화. 새 회차",
+    "chapter": "제1장",
+    "startNode": "ep2_start_1795251055058",
+    "hubNode": "ep2_start_1795251055058"
   }
 };
 
@@ -598,5 +605,17 @@ export const STORY_NODES = {
         "locationId": "loc_lab"
       }
     ]
+  },
+  "ep2_start_1795251055058": {
+    "id": "ep2_start_1795251055058",
+    "episodeId": "ep2",
+    "title": "새 회차 시작",
+    "chapter": "제1장",
+    "locationName": "장소 이름",
+    "summary": "이 회차의 첫 장면 요약을 입력하세요.",
+    "paragraphs": [
+      "새 회차의 본문을 입력하세요."
+    ],
+    "choices": []
   }
 };
