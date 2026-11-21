@@ -1103,7 +1103,7 @@ export class MemoBoard {
             this.detachedNodes.set(this.dragNode.id, this.dragNode);
           }
           if (!this.svg.hasPointerCapture(event.pointerId)) {
-            this.svg.setPointerCapture(event.pointerId);
+            try { this.svg.setPointerCapture(event.pointerId); } catch (e) {}
           }
         }
 
@@ -1124,6 +1124,7 @@ export class MemoBoard {
         const currentAxial = this.pixelToAxial(newX, newY);
         this.dragNode.q = currentAxial.q;
         this.dragNode.r = currentAxial.r;
+        this.detachedNodes.set(this.dragNode.id, this.dragNode);
         this._evaluateAdjacencies();
         this.render();
         return;
@@ -1478,26 +1479,35 @@ export class MemoBoard {
       if (parent) {
         const entry = parent.entry || parent;
         if (entry && Array.isArray(entry.subClues)) {
-          parent.subClues = entry.subClues.filter(sc =>
+          const unlockedScs = entry.subClues.filter(sc =>
             sc.unlockedByDefault !== false || sc.isUnlocked || (typeof state !== 'undefined' && (state.isClueConditionUnlocked?.(sc.id) || state.isClueConditionUnlocked?.(sc.label)))
-          ).map(sc => ({
-            ...sc,
-            isUnlocked: true,
-            parentEntry: entry,
-            parentId: parent.id
-          }));
+          );
+          parent.subClues = unlockedScs.map(sc => {
+            const existing = (parent.subClues || []).find(e => e.id === sc.id) || this.detachedNodes.get(sc.id);
+            return existing || {
+              ...sc,
+              isUnlocked: true,
+              parentEntry: entry,
+              parentId: parent.id
+            };
+          });
         }
         if (entry && Array.isArray(entry.subItems)) {
-          parent.subItems = entry.subItems.filter(si => {
+          const unlockedSis = entry.subItems.filter(si => {
             if (!si) return false;
             if (typeof si === 'string') return true;
             return si.unlockedByDefault !== false || si.isUnlocked || (typeof state !== 'undefined' && state.isSubItemUnlocked?.(si.id, si.label, entry));
-          }).map(si => ({
-            ...(typeof si === 'string' ? { id: `si_${si}`, label: si } : si),
-            isUnlocked: true,
-            parentEntry: entry,
-            parentId: parent.id
-          }));
+          });
+          parent.subItems = unlockedSis.map(si => {
+            const rawId = typeof si === 'string' ? `si_${si}` : si.id;
+            const existing = (parent.subItems || []).find(e => e.id === rawId) || this.detachedNodes.get(rawId);
+            return existing || {
+              ...(typeof si === 'string' ? { id: `si_${si}`, label: si } : si),
+              isUnlocked: true,
+              parentEntry: entry,
+              parentId: parent.id
+            };
+          });
         }
 
         if (this.dragNode?.id !== parent.id && Number.isFinite(parent.q) && Number.isFinite(parent.r)) {
@@ -1505,6 +1515,7 @@ export class MemoBoard {
           parent.x = pPos.x;
           parent.y = pPos.y;
         }
+
         // 1. 단서들 일정한 간격으로 상단 가로 배치 (y = -36.4)
         const subClues = parent.subClues || [];
         const count = subClues.length;
@@ -1514,21 +1525,35 @@ export class MemoBoard {
           sc.role = 'clue';
           sc.isMidClue = true;
           sc.sub = '단서';
-          if (!this.detachedNodes.has(sc.id) || sc.q === undefined) {
+
+          if (this.dragNode?.id === sc.id) {
+            sc.q = this.dragNode.q;
+            sc.r = this.dragNode.r;
+            sc.x = this.dragNode.x;
+            sc.y = this.dragNode.y;
+            this.detachedNodes.set(sc.id, this.dragNode);
+            return;
+          }
+
+          const savedSc = this.deductionPositions.get(sc.id) || this.positions.get(sc.id);
+          if (savedSc && Number.isFinite(savedSc.q) && Number.isFinite(savedSc.r)) {
+            sc.q = savedSc.q;
+            sc.r = savedSc.r;
+          } else if (!Number.isFinite(sc.q) || !Number.isFinite(sc.r)) {
             const targetX = (idx - (count - 1) / 2) * 126;
             const targetY = -36.4;
             const hex = this.pixelToAxial(targetX, targetY);
             sc.q = hex.q;
             sc.r = hex.r;
-            sc.isDetached = true;
-            this.detachedNodes.set(sc.id, sc);
+            this.deductionPositions.set(sc.id, { q: sc.q, r: sc.r });
             this.positions.set(sc.id, { q: sc.q, r: sc.r });
           }
-          if (this.dragNode?.id !== sc.id) {
-            const pos = this.axialToPixel(sc.q, sc.r);
-            sc.x = pos.x;
-            sc.y = pos.y;
-          }
+
+          sc.isDetached = true;
+          this.detachedNodes.set(sc.id, sc);
+          const pos = this.axialToPixel(sc.q, sc.r);
+          sc.x = pos.x;
+          sc.y = pos.y;
         });
 
         // 2. 세부 타일들 (탈락되지 않은 타일들: 조건 타일들과 최소 거리 2를 유지하여 오픈 시 자동 판정 방지)
@@ -1547,19 +1572,33 @@ export class MemoBoard {
             this.detachedNodes.delete(item.id);
             return;
           }
-          if (!this.detachedNodes.has(item.id) || item.q === undefined || item.r === undefined) {
+
+          if (this.dragNode?.id === item.id) {
+            item.q = this.dragNode.q;
+            item.r = this.dragNode.r;
+            item.x = this.dragNode.x;
+            item.y = this.dragNode.y;
+            this.detachedNodes.set(item.id, this.dragNode);
+            return;
+          }
+
+          const savedItem = this.deductionPositions.get(item.id) || this.positions.get(item.id);
+          if (savedItem && Number.isFinite(savedItem.q) && Number.isFinite(savedItem.r)) {
+            item.q = savedItem.q;
+            item.r = savedItem.r;
+          } else if (!Number.isFinite(item.q) || !Number.isFinite(item.r)) {
             const slot = candidateSlots[slotIdx++] || this._findFreeHexNear(0, 2, item.id);
             item.q = slot.q;
             item.r = slot.r;
-            item.isDetached = true;
-            this.detachedNodes.set(item.id, item);
+            this.deductionPositions.set(item.id, { q: item.q, r: item.r });
             this.positions.set(item.id, { q: item.q, r: item.r });
           }
-          if (this.dragNode?.id !== item.id) {
-            const pos = this.axialToPixel(item.q, item.r);
-            item.x = pos.x;
-            item.y = pos.y;
-          }
+
+          item.isDetached = true;
+          this.detachedNodes.set(item.id, item);
+          const pos = this.axialToPixel(item.q, item.r);
+          item.x = pos.x;
+          item.y = pos.y;
         });
       }
 
@@ -1794,6 +1833,10 @@ export class MemoBoard {
     group.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 && event.pointerType === 'mouse') return;
       event.stopPropagation();
+
+      try {
+        this.svg.setPointerCapture(event.pointerId);
+      } catch (e) {}
 
       const targetNode = node;
       this.dragNode = targetNode;

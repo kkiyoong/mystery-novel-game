@@ -10,13 +10,6 @@ export const STORY_EPISODES = {
     "chapter": "제1장. 한밤중의 비상 소집",
     "startNode": "ep1_pocket_intro",
     "hubNode": "story_1795192473432"
-  },
-  "ep2": {
-    "id": "ep2",
-    "title": "제1화. 새 회차",
-    "chapter": "제1장",
-    "startNode": "ep2_start_1795251055058",
-    "hubNode": "ep2_start_1795251055058"
   }
 };
 
@@ -425,7 +418,7 @@ export const STORY_NODES = {
       "“죄송합니다. …앞이 하나도 안 보여서요.”",
       "“불 꺼진 네블라 홀에서는 반딧불이 물약을 먹고 들어오는 건 상식… 가만, 너 이제보니 신입생이구나?”",
       "“네. 저기… 약초학 수업 들어보셨어요?”",
-      "“아, (약초학 교수 이름) 교수님 수업이구나. 처음에는 나도 당황스러웠지. 그보다, 내 이름은 (강당의 선배 이름)이야.”",
+      "“아, 허비스 교수님 수업. 처음에는 나도 당황스러웠지. 그보다, 내 이름은 에밀리야.”",
       "“저는 레이든 부르크라고 해요.”",
       "“그래. 레이든. 정답은 가르쳐주진 못하지만. 궁금한 게 있으면 물어봐.”",
       "[인물: 선배 1 | 네블라 홀에서 만난 선배. | images/elena_avatar.png]"
@@ -605,17 +598,5 @@ export const STORY_NODES = {
         "locationId": "loc_lab"
       }
     ]
-  },
-  "ep2_start_1795251055058": {
-    "id": "ep2_start_1795251055058",
-    "episodeId": "ep2",
-    "title": "새 회차 시작",
-    "chapter": "제1장",
-    "locationName": "장소 이름",
-    "summary": "이 회차의 첫 장면 요약을 입력하세요.",
-    "paragraphs": [
-      "새 회차의 본문을 입력하세요."
-    ],
-    "choices": []
   }
 };
