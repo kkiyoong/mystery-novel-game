@@ -212,6 +212,7 @@ export class GameEngine {
       state.getFlag('chosen_choice_story_1795180010121_1') ||
       state.getFlag('chosen_text_story_1795180010121_손전등을 꺼낸다.') ||
       state.getFlag('chosen_text_story_1795180010121_일단 앞으로 전진한다.') ||
+      state.getFlag('chose_forward_in_nebula') ||
       state.getFlag('visited_target_story_1795180210502') ||
       (state.hasVisitedNode && (
         state.hasVisitedNode('story_1795180210502') ||
@@ -222,13 +223,56 @@ export class GameEngine {
     );
   }
 
+  hasChosenMoveForwardInNebula() {
+    return Boolean(
+      state.getFlag('chose_forward_in_nebula') ||
+      state.getFlag('chosen_choice_story_1795180010121_1') ||
+      state.getFlag('chosen_text_story_1795180010121_일단 앞으로 전진한다.') ||
+      state.getFlag('visited_target_story_1795180210502') ||
+      (state.hasVisitedNode && (
+        state.hasVisitedNode('story_1795180210502') ||
+        state.hasVisitedNode('story_1795180361145') ||
+        state.hasVisitedNode('story_1795180742741') ||
+        state.hasVisitedNode('story_1795185391071')
+      ))
+    );
+  }
+
+  isHotspotVisible(hs, scene = null) {
+    if (!hs) return false;
+
+    // 네블라 홀: 플레이어가 '앞으로 전진한다'를 선택했을 경우 인물 대화(에밀리) 숨김
+    const isNebulaScene = (scene?.id === 'loc_nebula') || (scene && scene.title === '네블라 홀');
+    const isEmily = hs.id === 'hotspot_1795188613657' || hs.characterName === '에밀리' || hs.title === '에밀리';
+    if (isEmily && (isNebulaScene || !scene) && this.hasChosenMoveForwardInNebula()) {
+      return false;
+    }
+
+    if (hs.hideIfFlags) {
+      const hideFlags = Array.isArray(hs.hideIfFlags)
+        ? hs.hideIfFlags
+        : String(hs.hideIfFlags).split(',').map((s) => s.trim()).filter(Boolean);
+      if (hideFlags.some((f) => state.getFlag(f))) return false;
+    }
+
+    if (hs.requiresFlags) {
+      const reqFlags = Array.isArray(hs.requiresFlags)
+        ? hs.requiresFlags
+        : String(hs.requiresFlags).split(',').map((s) => s.trim()).filter(Boolean);
+      if (!reqFlags.every((f) => state.getFlag(f))) return false;
+    }
+
+    return true;
+  }
+
   _getLocationStatus(locId, choiceNode = null) {
     const activeScenes = (typeof INVESTIGATION_SCENES !== 'undefined' ? INVESTIGATION_SCENES : window.INVESTIGATION_SCENES) || {};
     const scene = activeScenes[locId];
     if (scene && Array.isArray(scene.hotspots) && scene.hotspots.length > 0) {
-      const total = scene.hotspots.length;
-      const collected = scene.hotspots.filter(hs => state.isHotspotCollected(hs.id)).length;
-      if (collected >= total) {
+      const visibleHotspots = scene.hotspots.filter(hs => this.isHotspotVisible(hs, scene));
+      const total = visibleHotspots.length;
+      const collected = visibleHotspots.filter(hs => state.isHotspotCollected(hs.id)).length;
+      if (collected >= total && total > 0) {
         return { status: 'complete', label: '조사 완료 ✓', total, collected };
       }
       if (collected > 0) {
@@ -2708,6 +2752,10 @@ export class GameEngine {
     this.hotspotsLayer.innerHTML = '';
 
     (scene.hotspots || []).forEach((hs) => {
+      if (!this.isHotspotVisible(hs, scene)) {
+        return;
+      }
+
       const isCharDeparted = hs.type === 'character' && this.isCharacterDialogueDone(hs);
       const isCollected = state.isHotspotCollected(hs.id) || isCharDeparted;
 
@@ -2893,6 +2941,7 @@ export class GameEngine {
   }
 
   interactHotspot(hs, spotElement) {
+    if (!this.isHotspotVisible(hs)) return;
     this.playAudio('click');
     const isCollected = state.isHotspotCollected(hs.id);
     const linkedMemoId = hs.memoId !== undefined

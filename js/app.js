@@ -1938,6 +1938,7 @@ class App {
       state.getFlag('chosen_choice_story_1795180010121_1') ||
       state.getFlag('chosen_text_story_1795180010121_손전등을 꺼낸다.') ||
       state.getFlag('chosen_text_story_1795180010121_일단 앞으로 전진한다.') ||
+      state.getFlag('chose_forward_in_nebula') ||
       state.getFlag('visited_target_story_1795180210502') ||
       (state.hasVisitedNode && (
         state.hasVisitedNode('story_1795180210502') ||
