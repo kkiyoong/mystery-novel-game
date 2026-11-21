@@ -1114,19 +1114,6 @@ export const EPISODE_DATA = {
           "사서",
           "도서관"
         ]
-      },
-      {
-        "id": "char_선배_1",
-        "category": "character",
-        "title": "선배 1",
-        "icon": "images/elena_avatar.png",
-        "summary": "네블라 홀에서 만난 선배.",
-        "description": "네블라 홀에서 만난 선배.",
-        "relatedEpisode": "ep1",
-        "unlockedByDefault": false,
-        "keywords": [
-          "선배 1"
-        ]
       }
     ]
   },
@@ -1536,20 +1523,21 @@ export const EPISODE_DATA = {
         "hotspots": [
           {
             "id": "hotspot_1795188613657",
-            "title": "학생",
+            "title": "에밀리",
             "type": "character",
             "coords": {
               "x": 21,
               "y": 80
             },
-            "icon": "👤",
+            "icon": "images/elena_avatar.png",
+            "image": "images/elena.png",
             "monologue": "선배인가?",
-            "characterName": "새 인물 1",
-            "characterRole": "학생",
+            "characterName": "에밀리",
+            "characterRole": "네블라 홀에서 만난 선배.",
             "dialogueTree": {
               "start": {
-                "speaker": "새 인물 1",
-                "text": "“너 뭐야. 여기서는 빛 마법 금지인 거 몰라?”\n“네? 입학식에서는….”\n“그건 입학식에서만 그런 거고. 보통은 다들 숨을 곳이 필요할 때 여기 와서 할 일을 한다고. 가만 보니 너, 신입생이구나?”\n“네.”\n“이름이 뭐야? 난 (강당의 선배 이름)이야.”\n“레이든 부르크입니다.”\n“그래, 레이든. 이제 그 빛 좀 꺼줄래? 다들 여기를 쳐다보잖아.”\n“아, 네…! 그런데 불을 끄면 하나도 안 보이는데요.”\n“에휴, 그러니까. 안 보여서 다들 숨어 있는 거라고.”\n“왜 숨나요?”\n“그건 과제를 못해서… 아니, 아니다. 자, 이거 얼른 받아서 마셔. 시선 끌리니까.”\n\n[아이템: 반딧물 포션 | 먹으면 어두운 곳도 잘 볼 수 있다. | 🧪]\n\n[아이템사용: 반딧물 포션 | 반딧물 포션을(를) 사용하여 상호작용했습니다. | 🧪]\n\"신입생이니까 특별히 줄게. 원래는 비싸게 파는 건데….”\n\"우와, 빛을 꺼도 앞이 보이네요? 감사합니다!”\n“그래, 이제 빨리 가 봐. 이목이 끌려서 곤란하다고.”\n“어, 저기, 물어볼 게….”",
+                "speaker": "에밀리",
+                "text": "“너 뭐야. 여기서는 빛 마법 금지인 거 몰라?”\n“네? 입학식에서는….”\n“그건 입학식에서만 그런 거고. 보통은 다들 숨을 곳이 필요할 때 여기 와서 할 일을 한다고. 가만 보니 너, 신입생이구나?”\n“네.”\n“이름이 뭐야? 난 에밀리야.”\n“레이든 부르크입니다.”\n“그래, 레이든. 이제 그 빛 좀 꺼줄래? 다들 여기를 쳐다보잖아.”\n“아, 네…! 그런데 불을 끄면 하나도 안 보이는데요.”\n“에휴, 그러니까. 안 보여서 다들 숨어 있는 거라고.”\n“왜 숨나요?”\n“그건 과제를 못해서… 아니, 아니다. 자, 이거 얼른 받아서 마셔. 시선 끌리니까.”\n\n[아이템: 반딧물 포션 | 먹으면 어두운 곳도 잘 볼 수 있다. | 🧪]\n\n[아이템사용: 반딧물 포션 | 반딧물 포션을(를) 사용하여 상호작용했습니다. | 🧪]\n\"신입생이니까 특별히 줄게. 원래는 비싸게 파는 건데….”\n\"우와, 빛을 꺼도 앞이 보이네요? 감사합니다!”\n“그래, 이제 빨리 가 봐. 이목이 끌려서 곤란하다고.”\n“어, 저기, 물어볼 게….”",
                 "options": [
                   {
                     "text": "대화를 마친다.",
@@ -1558,7 +1546,8 @@ export const EPISODE_DATA = {
                 ]
               }
             },
-            "memoId": "char_elena"
+            "memoId": "char_elena",
+            "characterId": "char_elena"
           },
           {
             "id": "hotspot_1795194907673",
@@ -1605,7 +1594,7 @@ export const EPISODE_DATA = {
       {
         "id": "char_elena",
         "category": "character",
-        "title": "선배 1",
+        "title": "에밀리",
         "icon": "images/elena_avatar.png",
         "image": "images/elena.png",
         "summary": "네블라 홀에서 만난 선배.",
@@ -1613,9 +1602,9 @@ export const EPISODE_DATA = {
         "relatedEpisode": "ep1",
         "unlockedByDefault": false,
         "keywords": [
-          "엘레나",
-          "사서",
-          "도서관"
+          "에밀리",
+          "선배",
+          "네블라 홀"
         ]
       }
     ]

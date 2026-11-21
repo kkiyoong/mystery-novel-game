@@ -2786,6 +2786,26 @@ export class GameEngine {
         return;
       }
 
+      if (hs.type === 'character') {
+        if (hs.id === 'hotspot_1795188613657' || hs.characterName === '선배 1' || hs.characterName === '새 인물 1' || hs.title === '선배 1' || hs.title === '새 인물 1') {
+          hs.characterName = '에밀리';
+          hs.title = '에밀리';
+          if (!hs.image) hs.image = 'images/elena.png';
+          if (!hs.icon || hs.icon === '👤') hs.icon = 'images/elena_avatar.png';
+        }
+      }
+
+      let characterImage = hs.image;
+      if (!characterImage && hs.avatar && hs.avatar.includes('/')) characterImage = hs.avatar;
+      if (!characterImage && hs.icon && hs.icon.includes('/')) characterImage = hs.icon;
+      if (!characterImage && hs.type === 'character') {
+        const codexChar = (typeof CODEX_DATA !== 'undefined' ? CODEX_DATA : []).find(
+          (c) => c && (c.id === hs.characterId || c.id === hs.memoId || c.title === hs.characterName || c.title === hs.title)
+        );
+        if (codexChar?.image) characterImage = codexChar.image;
+        else if (codexChar?.icon && codexChar.icon.includes('/')) characterImage = codexChar.icon;
+      }
+
       const spot = document.createElement('button');
       spot.type = 'button';
       spot.className = `investigation-hotspot hotspot-type-${hs.type} ${isCollected ? 'is-collected' : ''} ${isCharDeparted ? 'is-departed' : ''}`;
@@ -2809,8 +2829,8 @@ export class GameEngine {
       const hotspotMarker = hs.type === 'character'
         ? `
           <span class="hotspot-character-art">
-            ${hs.image
-              ? `<img class="hotspot-character-image" src="${escapeHtml(hs.image)}" alt="">`
+            ${characterImage
+              ? `<img class="hotspot-character-image" src="${escapeHtml(characterImage)}" alt="">`
               : `<svg class="hotspot-character-placeholder" viewBox="0 0 64 112" aria-hidden="true">
                   <circle cx="32" cy="15" r="9" fill="#FFFFFF" stroke="#111111" stroke-width="2.5"/>
                   <path d="M23 29Q32 24 41 29L47 63L42 82H22L17 63Z" fill="#FAFAFA" stroke="#111111" stroke-width="2.5" stroke-linejoin="round"/>
@@ -2966,9 +2986,12 @@ export class GameEngine {
     if (!this.isHotspotVisible(hs)) return;
     this.playAudio('click');
     const isCollected = state.isHotspotCollected(hs.id);
-    const linkedMemoId = hs.memoId !== undefined
+    let linkedMemoId = hs.memoId !== undefined
       ? hs.memoId
       : (hs.codexId || hs.unlockedCodexId || (hs.type === 'character' ? hs.characterId : ''));
+    if (linkedMemoId === 'char_선배_1') {
+      linkedMemoId = 'char_elena';
+    }
 
     // 탐사 핫스팟에 연결된 세부 타일 추가 기록 해금 검사
     const targetRecordId = hs.grantsRecordId || hs.recordId || hs.unlockedRecordId;
@@ -3237,6 +3260,13 @@ export class GameEngine {
 
   openCharacterDialogue(hs, isFirstEncounter = false) {
     if (!this.dialogueModal) return;
+    if (hs.id === 'hotspot_1795188613657' || hs.characterName === '선배 1' || hs.characterName === '새 인물 1' || hs.title === '선배 1' || hs.title === '새 인물 1') {
+      hs.characterName = '에밀리';
+      hs.title = '에밀리';
+      if (!hs.image) hs.image = 'images/elena.png';
+      if (!hs.icon || hs.icon === '👤') hs.icon = 'images/elena_avatar.png';
+    }
+
     this.currentDialogueHotspot = hs;
     this.currentDialogueTree = hs.dialogueTree;
     this.currentDialogueNodeKey = 'start';
@@ -3251,9 +3281,16 @@ export class GameEngine {
     const monologueBox = document.getElementById('dialogue-monologue-box');
     const monologueTextEl = document.getElementById('dialogue-monologue-text');
 
-    if (charNameEl) charNameEl.textContent = hs.characterName;
-    if (charRoleEl) charRoleEl.textContent = hs.characterRole;
-    const avatarSrc = hs.avatar || (hs.icon && hs.icon.includes('/') ? hs.icon : (hs.image && hs.image.includes('/') ? hs.image : ''));
+    if (charNameEl) charNameEl.textContent = hs.characterName || hs.title || '인물';
+    if (charRoleEl) charRoleEl.textContent = hs.characterRole || '';
+    let avatarSrc = hs.avatar || (hs.icon && hs.icon.includes('/') ? hs.icon : (hs.image && hs.image.includes('/') ? hs.image : ''));
+    if (!avatarSrc) {
+      const codexChar = (typeof CODEX_DATA !== 'undefined' ? CODEX_DATA : []).find(
+        (c) => c && (c.id === hs.characterId || c.id === hs.memoId || c.title === hs.characterName || c.title === hs.title)
+      );
+      if (codexChar?.icon && codexChar.icon.includes('/')) avatarSrc = codexChar.icon;
+      else if (codexChar?.image && codexChar.image.includes('/')) avatarSrc = codexChar.image;
+    }
     if (avatarEl) {
       if (avatarSrc) {
         avatarEl.innerHTML = `<img src="${escapeHtml(avatarSrc)}" alt="${escapeHtml(hs.characterName || '인물')}" class="dialogue-avatar-img">`;

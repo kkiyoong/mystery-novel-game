@@ -136,6 +136,10 @@ class GameState {
             delete raw.char_aren;
             delete raw.item_inquisitor_badge;
             delete raw.magic_resonance;
+            if (raw.char_선배_1) {
+              raw.char_elena = true;
+              delete raw.char_선배_1;
+            }
             return raw;
           })(),
           unlockedTileRecords: {

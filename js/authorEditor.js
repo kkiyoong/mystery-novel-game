@@ -18,7 +18,7 @@ import {
   initEpisodeStore
 } from './data/episodeStore.js?v=20261121_1900';
 
-export const CODE_BUILD_ID = '20261121_1440';
+export const CODE_BUILD_ID = '20261121_2330';
 const STORAGE_KEY = 'mystery_novel_author_data_v1';
 const STAT_FIELDS = [
   { id: 'magic', label: '마법' },
@@ -179,6 +179,60 @@ function ensureMainBuildingData() {
     const libLoc = MAP_LOCATIONS.find(l => l.id === 'loc_library');
     if (libLoc && libLoc.isCurrent) {
       delete libLoc.isCurrent;
+    }
+  }
+
+  // 네블라 홀 에밀리 캐릭터 핫스팟 데이터 보정 (과거 로컬 저장된 '선배 1' / '새 인물 1' 및 이미지 누락 복구)
+  const sanitizeHotspot = (hs) => {
+    if (!hs) return;
+    if (hs.id === 'hotspot_1795188613657' || hs.characterName === '선배 1' || hs.characterName === '새 인물 1' || hs.title === '선배 1' || hs.title === '새 인물 1') {
+      hs.characterName = '에밀리';
+      hs.title = '에밀리';
+      hs.image = 'images/elena.png';
+      hs.icon = 'images/elena_avatar.png';
+      hs.characterRole = '네블라 홀에서 만난 선배.';
+      hs.memoId = 'char_elena';
+      hs.characterId = 'char_elena';
+      if (hs.dialogueTree?.start) {
+        if (hs.dialogueTree.start.speaker === '새 인물 1' || hs.dialogueTree.start.speaker === '선배 1') {
+          hs.dialogueTree.start.speaker = '에밀리';
+        }
+      }
+    }
+  };
+
+  const sanitizeScenes = (scenes) => {
+    if (!scenes || typeof scenes !== 'object') return;
+    Object.values(scenes).forEach((sc) => {
+      if (Array.isArray(sc?.hotspots)) {
+        sc.hotspots.forEach(sanitizeHotspot);
+      }
+    });
+  };
+
+  if (typeof INVESTIGATION_SCENES !== 'undefined') {
+    sanitizeScenes(INVESTIGATION_SCENES);
+  }
+  if (typeof EPISODE_DATA !== 'undefined') {
+    Object.values(EPISODE_DATA).forEach((ep) => {
+      if (ep?.investigationScenes) sanitizeScenes(ep.investigationScenes);
+      if (Array.isArray(ep?.characters)) {
+        ep.characters = ep.characters.filter(c => c && c.id !== 'char_선배_1');
+        const elenaChar = ep.characters.find(c => c && c.id === 'char_elena');
+        if (elenaChar) {
+          elenaChar.title = '에밀리';
+          elenaChar.image = 'images/elena.png';
+          elenaChar.icon = 'images/elena_avatar.png';
+        }
+      }
+    });
+  }
+  if (typeof CODEX_DATA !== 'undefined' && Array.isArray(CODEX_DATA)) {
+    const elena = CODEX_DATA.find(c => c && c.id === 'char_elena');
+    if (elena) {
+      elena.title = '에밀리';
+      elena.image = 'images/elena.png';
+      elena.icon = 'images/elena_avatar.png';
     }
   }
 }

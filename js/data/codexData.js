@@ -427,19 +427,6 @@ export const CODEX_DATA = [
       "사서",
       "도서관"
     ]
-  },
-  {
-    "id": "char_선배_1",
-    "category": "character",
-    "title": "선배 1",
-    "icon": "images/elena_avatar.png",
-    "summary": "네블라 홀에서 만난 선배.",
-    "description": "네블라 홀에서 만난 선배.",
-    "relatedEpisode": "ep1",
-    "unlockedByDefault": false,
-    "keywords": [
-      "선배 1"
-    ]
   }
 ];
 
