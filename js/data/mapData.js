@@ -289,6 +289,7 @@ export const INVESTIGATION_SCENES = {
     "title": "네블라 홀",
     "subtitle": "불 꺼진 네블라 홀.",
     "layout": "library",
+    "bgImage": "assets/images/scenes/nebula_bg.jpg",
     "exitStoryNode": "story_1795192473432",
     "hotspots": [
       {
