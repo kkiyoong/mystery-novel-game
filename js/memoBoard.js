@@ -1834,10 +1834,6 @@ export class MemoBoard {
       if (event.button !== 0 && event.pointerType === 'mouse') return;
       event.stopPropagation();
 
-      try {
-        this.svg.setPointerCapture(event.pointerId);
-      } catch (e) {}
-
       const targetNode = node;
       this.dragNode = targetNode;
       this.dragMoved = false;
@@ -1856,6 +1852,13 @@ export class MemoBoard {
 
     const selectNode = () => {
       if (this.dragMoved) return;
+
+      const now = Date.now();
+      if (this._lastSelectTime && now - this._lastSelectTime < 250 && this._lastSelectNodeId === node.id) {
+        return;
+      }
+      this._lastSelectTime = now;
+      this._lastSelectNodeId = node.id;
 
       this.selectedId = node.id;
       if (node.isNew) {
@@ -1930,6 +1933,11 @@ export class MemoBoard {
       this.render();
     };
 
+    group.addEventListener('pointerup', (event) => {
+      if (!this.dragMoved && (event.button === 0 || event.button === undefined)) {
+        selectNode();
+      }
+    });
     group.addEventListener('click', (event) => {
       event.stopPropagation();
       selectNode();
