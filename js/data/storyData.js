@@ -75,7 +75,7 @@ export const STORY_NODES = {
     ],
     "locationName": "본관 복도",
     "summary": "새 룸메이트를 만났다. 약초학 강의를 들으러 가자.",
-    "editorX": 390,
+    "editorX": 50,
     "editorY": 50
   },
   "ep1_return_from_investigation": {
@@ -262,13 +262,13 @@ export const STORY_NODES = {
     "locationName": "약초학 강의실",
     "summary": "약초학 강의실에 도착하니, 화분에서 말하는 식물이 자라났다. 퀴즈를 맞춰야 하는 걸까?",
     "isHubNode": false,
-    "editorX": 730,
+    "editorX": 390,
     "editorY": 50
   },
   "story_1795161633215": {
     "id": "story_1795161633215",
     "episodeId": "ep1",
-    "title": "정답을 맞추자",
+    "title": "정답을 입력하자",
     "chapter": "약초학 강의실",
     "locationName": "약초학 강의실",
     "summary": "퀴즈의 답을 찾았다.",
@@ -280,11 +280,11 @@ export const STORY_NODES = {
       " ",
       "도서관, 연금술 연구실, 비밀 안개 정원을 돌아다니며 모은 단서들이 머릿속에서 선명하게 이어졌다.",
       "이제 확신을 갖고 정답을 적어 넣자.",
-      "[정답입력: 약초 퀴즈 | 용비늘꽃, 용비늘, 용비늘풀 | ✨ 정답입니다! | story_quiz_cleared]"
+      "[정답입력: 약초 퀴즈 | 용비늘꽃, 용비늘, 용비늘풀 | ✨ 정답입니다! | story_1795265012263 | story_1795265012263 | story_1795265081222]"
     ],
     "choices": [
       {
-        "text": "지도를 펼쳐 어디로 갈지 확인한다",
+        "text": "아직 덜 살펴본 게 있을까?",
         "nextNode": "action:open_map",
         "isOpenMapTrigger": true,
         "desc": "노바리스 아카데미 지도를 열어 전체 장소와 건물을 살펴본다.",
@@ -292,8 +292,10 @@ export const STORY_NODES = {
         "isConclusionChoice": false
       }
     ],
-    "editorX": 1070,
-    "editorY": 50
+    "editorX": 730,
+    "editorY": 50,
+    "successSceneId": "story_1795265012263",
+    "failSceneId": "story_1795265081222"
   },
   "story_1795179345197": {
     "id": "story_1795179345197",
@@ -325,7 +327,7 @@ export const STORY_NODES = {
         }
       }
     ],
-    "editorX": 1070,
+    "editorX": 730,
     "editorY": 810
   },
   "story_1795179565179": {
@@ -378,7 +380,7 @@ export const STORY_NODES = {
         "hideIfChosen": false
       }
     ],
-    "editorX": 1070,
+    "editorX": 730,
     "editorY": 430
   },
   "story_1795180010121": {
@@ -420,7 +422,7 @@ export const STORY_NODES = {
         }
       }
     ],
-    "editorX": 1070,
+    "editorX": 730,
     "editorY": 240
   },
   "story_1795180210502": {
@@ -466,8 +468,8 @@ export const STORY_NODES = {
         "nextNode": "story_1795192473432"
       }
     ],
-    "editorX": 1410,
-    "editorY": 50
+    "editorX": 1070,
+    "editorY": 240
   },
   "story_1795180361145": {
     "id": "story_1795180361145",
@@ -501,7 +503,7 @@ export const STORY_NODES = {
         "nextNode": "story_1795192473432"
       }
     ],
-    "editorX": 1750,
+    "editorX": 1410,
     "editorY": 50
   },
   "story_1795180742741": {
@@ -535,7 +537,7 @@ export const STORY_NODES = {
         "nextNode": "story_1795192473432"
       }
     ],
-    "editorX": 1750,
+    "editorX": 1410,
     "editorY": 430
   },
   "story_1795185391071": {
@@ -582,7 +584,7 @@ export const STORY_NODES = {
         "nextNode": "story_1795192473432"
       }
     ],
-    "editorX": 1750,
+    "editorX": 1410,
     "editorY": 240
   },
   "story_1795192473432": {
@@ -598,8 +600,8 @@ export const STORY_NODES = {
     ],
     "choices": [],
     "isHubNode": true,
-    "editorX": 390,
-    "editorY": 430
+    "editorX": 1070,
+    "editorY": 50
   },
   "story_1795202607078": {
     "id": "story_1795202607078",
@@ -634,7 +636,7 @@ export const STORY_NODES = {
         }
       }
     ],
-    "editorX": 1070,
+    "editorX": 730,
     "editorY": 620
   },
   "story_1795264818389": {
@@ -650,35 +652,38 @@ export const STORY_NODES = {
     "choices": [
       {
         "text": "역시 찍기는 어려워.",
-        "nextNode": "ep1_pocket_intro",
-        "desc": "아는 게 없어서 맞출 수 없네."
+        "nextNode": "story_1795192473432",
+        "desc": "아는 게 없어서 맞출 수 없네.",
+        "failSceneId": "story_1795192473432",
+        "successSceneId": "story_1795265012263"
       }
     ],
-    "successSceneId": "story_1795265012263",
-    "failSceneId": "story_1795265081222",
     "returnToHub": true,
-    "editorX": 50,
-    "editorY": 50
+    "successSceneId": "story_1795265012263",
+    "failSceneId": "story_1795265081222"
   },
   "story_1795265012263": {
     "id": "story_1795265012263",
     "episodeId": "ep1",
-    "title": "정답을 맞췄다!",
+    "title": "정답!",
     "chapter": "약초학 강의실",
     "locationName": "약초학 강의실",
     "summary": "이 장면의 최근 사건 요약을 입력하세요.",
     "paragraphs": [
-      "정답을 맞추었습니다."
+      "[빛: 정답입니다!]",
+      "종이 조각이 밝게 빛나더니 이내 사라졌다.",
+      "[아이템사용: 종이 조각 | 종이 조각을(를) 사용하여 상호작용했습니다. | 📜]",
+      "[스탯: 마법 +1  지식 +5 관찰력 +5 | 퀴즈를 맞추었다.]",
+      "교실에서 정답을 두고 논의하던 학생들이 내 쪽을 쳐다봤다.",
+      "왠지 으쓱한 기분이었다.",
+      "그때, 강의실 문이 거칠게 열렸다.",
+      "*",
+      "[타이핑: 쾅!]",
+      "*",
+      "[설명창: 강의실에 들어온 건 누구일까? 다음에 계속...| 💡]"
     ],
-    "choices": [
-      {
-        "text": "다음 장면으로 이동한다.",
-        "nextNode": "ep1_pocket_intro"
-      }
-    ],
-    "completesEpisode": true,
-    "editorX": 390,
-    "editorY": 240
+    "choices": [],
+    "completesEpisode": true
   },
   "story_1795265081222": {
     "id": "story_1795265081222",
@@ -688,15 +693,26 @@ export const STORY_NODES = {
     "locationName": "약초학 강의실",
     "summary": "이 장면의 최근 사건 요약을 입력하세요.",
     "paragraphs": [
-      "새 본문을 입력하세요."
+      "뭐지?",
+      "정답을 적어봤지만 아무 일도 일어나지 않았다.",
+      "여기에 적는 게 아니었나?",
+      "그때, 종이가 들썩였다.",
+      "종이 밑에서 덩굴이 뻗어나오기 시작했다.",
+      "\"으악, 이게 뭐야!\"",
+      "덩굴 쪽에서 강의실에서 들었던 것과 같은 목소리가 들렸다.",
+      "\"크하하하, 오답 벌칙이다!\"",
+      "덩굴이 길게 뻗어지더니 내 발을 걸어 넘어뜨렸다.",
+      "[스탯: 체력 -5 | 오답 벌칙을 받았다.]",
+      "꽤 아팠다.",
+      "아무래도 정답이 아닌가 보다.",
+      "다시 살펴보자."
     ],
     "choices": [
       {
-        "text": "다음 장면으로 이동한다.",
-        "nextNode": "ep1_pocket_intro"
+        "text": "다시 조사를 시작한다.",
+        "nextNode": "story_1795192473432",
+        "hideIfChosen": false
       }
-    ],
-    "editorX": 50,
-    "editorY": 240
+    ]
   }
 };

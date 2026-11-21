@@ -1930,8 +1930,27 @@ class App {
     const hasStory = Boolean(loc.targetStoryNode);
     const hasInv = Boolean(loc.hasInvestigation);
 
+    // 네블라 홀 본문에서 두 선택지 중 하나라도 고르고 나면 지도로 이동 시 항상 조사 장면으로만 향하도록 분기
+    const isNebulaBranched = loc.id === 'loc_nebula' && (
+      (this.engine?.isNebulaChoiceCompleted ? this.engine.isNebulaChoiceCompleted() : false) ||
+      state.getFlag('nebula_hall_choice_selected') ||
+      state.getFlag('chosen_choice_story_1795180010121_0') ||
+      state.getFlag('chosen_choice_story_1795180010121_1') ||
+      state.getFlag('chosen_text_story_1795180010121_손전등을 꺼낸다.') ||
+      state.getFlag('chosen_text_story_1795180010121_일단 앞으로 전진한다.') ||
+      state.getFlag('visited_target_story_1795180210502') ||
+      (state.hasVisitedNode && (
+        state.hasVisitedNode('story_1795180210502') ||
+        state.hasVisitedNode('story_1795180361145') ||
+        state.hasVisitedNode('story_1795180742741') ||
+        state.hasVisitedNode('story_1795185391071')
+      ))
+    );
+
     let mode = preferredMode;
-    if (!mode) {
+    if (isNebulaBranched && hasInv) {
+      mode = 'investigation';
+    } else if (!mode) {
       if (loc.destinationType === 'story') mode = 'story';
       else if (loc.destinationType === 'investigation') mode = 'investigation';
       else if (loc.travelMode === 'story') mode = 'story';

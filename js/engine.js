@@ -205,6 +205,23 @@ export class GameEngine {
     }, 3200);
   }
 
+  isNebulaChoiceCompleted() {
+    return Boolean(
+      state.getFlag('nebula_hall_choice_selected') ||
+      state.getFlag('chosen_choice_story_1795180010121_0') ||
+      state.getFlag('chosen_choice_story_1795180010121_1') ||
+      state.getFlag('chosen_text_story_1795180010121_손전등을 꺼낸다.') ||
+      state.getFlag('chosen_text_story_1795180010121_일단 앞으로 전진한다.') ||
+      state.getFlag('visited_target_story_1795180210502') ||
+      (state.hasVisitedNode && (
+        state.hasVisitedNode('story_1795180210502') ||
+        state.hasVisitedNode('story_1795180361145') ||
+        state.hasVisitedNode('story_1795180742741') ||
+        state.hasVisitedNode('story_1795185391071')
+      ))
+    );
+  }
+
   _getLocationStatus(locId, choiceNode = null) {
     const activeScenes = (typeof INVESTIGATION_SCENES !== 'undefined' ? INVESTIGATION_SCENES : window.INVESTIGATION_SCENES) || {};
     const scene = activeScenes[locId];
@@ -229,7 +246,7 @@ export class GameEngine {
     }
 
     if (locId === 'loc_nebula') {
-      const isVisited = state.hasVisitedNode ? state.hasVisitedNode('story_1795180010121') : false;
+      const isVisited = this.isNebulaChoiceCompleted();
       return isVisited ? { status: 'complete', label: '조사 완료 ✓' } : { status: 'unvisited', label: '미방문' };
     }
 
@@ -237,6 +254,13 @@ export class GameEngine {
   }
 
   renderStoryNode(nodeId) {
+    if (nodeId === 'story_1795180010121' && this.isNebulaChoiceCompleted() && !window.authorEditor?.panel?.classList.contains('is-visible')) {
+      state.setCurrentLocationId('loc_nebula');
+      state.setMode('investigation', 'loc_nebula');
+      this.startInvestigation('loc_nebula');
+      return;
+    }
+
     const node = STORY_NODES[nodeId];
     if (!node) {
       console.error(`Story node not found: ${nodeId}`);
@@ -509,6 +533,12 @@ export class GameEngine {
           const storyNode = btn.dataset.hubStoryNode;
           const locName = btn.querySelector('.hub-loc-name')?.textContent || locId;
           state.recordExplorationBaseline(locName || locId);
+          if (locId === 'loc_nebula' && this.isNebulaChoiceCompleted()) {
+            state.setCurrentLocationId('loc_nebula');
+            state.setMode('investigation', 'loc_nebula');
+            this.startInvestigation('loc_nebula');
+            return;
+          }
           const mapLoc = (MAP_LOCATIONS || []).find((l) => l.id === locId);
           if (mapLoc && mapLoc.destinationType === 'story' && mapLoc.targetStoryNode && STORY_NODES[mapLoc.targetStoryNode]) {
             state.setMode('story');
@@ -1146,7 +1176,7 @@ export class GameEngine {
     }
 
     const hubLocations = [
-      { id: 'loc_nebula', name: '네블라 홀', icon: '🔭', storyNode: 'story_1795180010121' },
+      { id: 'loc_nebula', name: '네블라 홀', icon: '🔭', storyNode: this.isNebulaChoiceCompleted() ? '' : 'story_1795180010121' },
       { id: 'loc_library', name: '도서관', icon: '📚' },
       { id: 'loc_lab', name: '연구관', icon: '🧪' },
       { id: 'loc_garden', name: '정원', icon: '🌿' }
@@ -2321,6 +2351,9 @@ export class GameEngine {
     if (choice.nextNode) {
       state.setFlag(`visited_target_${choice.nextNode}`, true);
     }
+    if (node.id === 'story_1795180010121') {
+      state.setFlag('nebula_hall_choice_selected', true);
+    }
 
     this.playAudio('click');
 
@@ -2438,6 +2471,13 @@ export class GameEngine {
           targetNode = failScene;
           this.showToast('오답 분기 장면으로 이동합니다.', 'warning', '❌');
         }
+      }
+
+      if (targetNode === 'story_1795180010121' && this.isNebulaChoiceCompleted()) {
+        state.setCurrentLocationId('loc_nebula');
+        state.setMode('investigation', 'loc_nebula');
+        this.startInvestigation('loc_nebula');
+        return;
       }
 
       if (targetNode) {
