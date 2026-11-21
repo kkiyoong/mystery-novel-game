@@ -479,6 +479,9 @@ export class AuthorEditor {
     this.storyPreviewTimer = null;
     this.lastFocusedTextarea = null;
 
+    try {
+      if (sessionStorage.getItem('author_mode_unlocked') === '1') document.body.classList.add('author-mode');
+    } catch (e) {}
     this.initPortalPasswordModal();
     this.toggleButton?.addEventListener('click', () => this.openPortalPasswordModal());
     document.getElementById('btn-home-author')?.addEventListener('click', () => this.openPortalPasswordModal());
@@ -629,6 +632,9 @@ export class AuthorEditor {
   }
 
   open() {
+    // 비밀번호 확인 후 작가 모드 진입: 작가 전용 UI(회차 목록 등) 표시 (탭을 닫으면 해제)
+    try { sessionStorage.setItem('author_mode_unlocked', '1'); } catch (e) {}
+    document.body.classList.add('author-mode');
     this.syncAllItems();
     this.panel?.classList.remove('hidden');
     this.toggleButton?.setAttribute('aria-expanded', 'true');

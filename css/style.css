@@ -7114,3 +7114,8 @@ body.theme-sepia .honeycomb-empty-icon {
   font-size: 11.5px;
   color: var(--text-muted);
 }
+
+/* 작가 모드 전용 요소: 독자에게는 숨김 */
+body:not(.author-mode) .author-only {
+  display: none !important;
+}

@@ -589,6 +589,7 @@ class App {
   }
 
   openStoryToc() {
+    if (!document.body.classList.contains('author-mode')) return; // 독자에게는 비공개
     this.renderStoryToc();
     const modal = document.getElementById('story-toc-modal');
     if (modal) {
