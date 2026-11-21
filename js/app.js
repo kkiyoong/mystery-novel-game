@@ -50,11 +50,21 @@ class App {
     this.init();
   }
 
+  safeInit(fn, name) {
+    try {
+      fn();
+    } catch (err) {
+      console.warn(`[App] ${name} 초기화 중 오류:`, err);
+    }
+  }
+
   init() {
-    this.wheel = new RotaryWheel({
-      onSelectPanel: (panelId) => this.openPocketModal(panelId),
-      playAudio: (type) => this.engine.playAudio(type)
-    });
+    this.safeInit(() => {
+      this.wheel = new RotaryWheel({
+        onSelectPanel: (panelId) => this.openPocketModal(panelId),
+        playAudio: (type) => this.engine.playAudio(type)
+      });
+    }, 'wheel');
 
     this.engine.onOpenMap = (targetLocationId = null) => {
       this.openPocketModal('map');
@@ -74,14 +84,14 @@ class App {
       this.openDeductionMode(topicId);
     };
 
-    this.applyReaderSettings(state.getReaderSettings());
-    this.initTopViewerBar();
-    this.initHomeView();
-    this.initStoryToc();
-    this.initAuthorEditor();
-    this.initPocketModals();
-    this.initHexBoards();
-    this.initDistractionFreeToggle();
+    this.safeInit(() => this.applyReaderSettings(state.getReaderSettings()), 'readerSettings');
+    this.safeInit(() => this.initTopViewerBar(), 'topViewerBar');
+    this.safeInit(() => this.initHomeView(), 'homeView');
+    this.safeInit(() => this.initStoryToc(), 'storyToc');
+    this.safeInit(() => this.initAuthorEditor(), 'authorEditor');
+    this.safeInit(() => this.initPocketModals(), 'pocketModals');
+    this.safeInit(() => this.initHexBoards(), 'hexBoards');
+    this.safeInit(() => this.initDistractionFreeToggle(), 'distractionFreeToggle');
 
     state.on('reset', () => {
       this.memoBoard?.resetBoardState?.();
@@ -93,19 +103,24 @@ class App {
     state.on('change', () => {
       this.refreshCurrentPanel();
       this.syncPocketAvailability();
-      this.wheel.updateNotificationBadge();
+      this.wheel?.updateNotificationBadge();
       this.updateCategoryUnreadBadges();
     });
 
     this.syncPocketAvailability();
     this.updateCategoryUnreadBadges();
 
-    if (state.getMode() === 'home') {
+    try {
+      if (state.getMode() === 'home') {
+        this.showHomeView();
+      } else if (state.getMode() === 'investigation') {
+        this.engine.startInvestigation(state.getCurrentLocationId());
+      } else {
+        this.engine.renderStoryNode(state.getCurrentNodeId());
+      }
+    } catch (modeErr) {
+      console.warn('[App] 초기 화면 렌더링 오류, 홈 화면으로 안전 복구:', modeErr);
       this.showHomeView();
-    } else if (state.getMode() === 'investigation') {
-      this.engine.startInvestigation(state.getCurrentLocationId());
-    } else {
-      this.engine.renderStoryNode(state.getCurrentNodeId());
     }
   }
 
@@ -480,13 +495,21 @@ class App {
     const lastMode = state.getLastActiveMode();
     if (lastMode === 'investigation') {
       const locId = state.getLastActiveLocationId();
-      state.setMode('investigation', locId);
-      this.engine.startInvestigation(locId);
+      if (INVESTIGATION_SCENES[locId]) {
+        state.setMode('investigation', locId);
+        this.engine.startInvestigation(locId);
+      } else {
+        const fallbackNode = STORY_EPISODES[state.getCurrentEpisodeId()]?.startNode || 'ep1_pocket_intro';
+        state.setMode('story');
+        state.setCurrentNode(fallbackNode);
+        this.engine.renderStoryNode(fallbackNode);
+      }
     } else {
       const nodeId = state.getLastActiveNodeId();
+      const validNode = STORY_NODES[nodeId] ? nodeId : (STORY_EPISODES[state.getCurrentEpisodeId()]?.startNode || 'ep1_pocket_intro');
       state.setMode('story');
-      state.setCurrentNode(nodeId);
-      this.engine.renderStoryNode(nodeId);
+      state.setCurrentNode(validNode);
+      this.engine.renderStoryNode(validNode);
     }
     this.syncPocketAvailability();
   }
@@ -613,7 +636,7 @@ class App {
     const history = state.getHistory() || [];
 
     // Group nodes by episode, then by chapter
-    const episodeGroups = new Map();
+    let episodeGroups = new Map();
     Object.values(STORY_NODES).forEach((node) => {
       const epId = node.episodeId || 'ep1';
       if (!episodeGroups.has(epId)) episodeGroups.set(epId, new Map());
@@ -622,6 +645,11 @@ class App {
       if (!chapterGroups.has(ch)) chapterGroups.set(ch, []);
       chapterGroups.get(ch).push(node);
     });
+
+    // 회차 순서(편집기에서 지정)대로 정렬
+    const episodeOrder = Object.keys(STORY_EPISODES);
+    const orderOf = (id) => (episodeOrder.indexOf(id) < 0 ? 9999 : episodeOrder.indexOf(id));
+    episodeGroups = new Map(Array.from(episodeGroups.entries()).sort((a, b) => orderOf(a[0]) - orderOf(b[0])));
 
     const completedEpisodes = state.getCompletedEpisodes();
     const currentEpisodeId = state.getCurrentEpisodeId();
@@ -2142,6 +2170,22 @@ class App {
   }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  window.gameApp = new App();
-});
+function bootApp() {
+  if (window.gameApp) return;
+  try {
+    window.gameApp = new App();
+  } catch (err) {
+    console.error('[App] 애플리케이션 초기화 실패:', err);
+    // 긴급 복구: localStorage 오류일 수 있으므로 안전 조치
+    try {
+      const home = document.getElementById('home-view');
+      if (home) home.classList.remove('hidden');
+    } catch (_) {}
+  }
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', bootApp);
+} else {
+  bootApp();
+}

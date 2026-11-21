@@ -169,6 +169,8 @@ a, button, [role="button"], .hotspot-pin, .iso-tile {
 
 .hidden {
   display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 /* --- 3. Top Viewer Bar (Web Novel Controls) --- */
@@ -2808,6 +2810,8 @@ body:has(.pocket-drawer-modal.is-open) .pocket-wheel-container {
 
 .category-unread-badge.hidden {
   display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .memo-mark-all-btn {
@@ -4923,6 +4927,8 @@ body.theme-sepia .honeycomb-empty-icon {
 
 .portal-pw-modal.hidden {
   display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .portal-pw-backdrop {
@@ -5093,6 +5099,8 @@ body.theme-sepia .honeycomb-empty-icon {
 
 .home-view.hidden {
   display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .home-container {
@@ -5381,6 +5389,8 @@ body.theme-sepia .honeycomb-empty-icon {
 
 .story-toc-modal.hidden {
   display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .story-toc-backdrop {
@@ -5796,6 +5806,8 @@ body.theme-sepia .honeycomb-empty-icon {
 
 .story-explanation-modal.hidden {
   display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .explanation-modal-backdrop {
@@ -6286,6 +6298,8 @@ body.theme-sepia .honeycomb-empty-icon {
 
 .book-reader-modal.hidden {
   display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .book-reader-backdrop {
@@ -6391,6 +6405,8 @@ body.theme-sepia .honeycomb-empty-icon {
 
 .book-monologue.hidden {
   display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .book-main-layout {
@@ -6871,6 +6887,8 @@ body.theme-sepia .honeycomb-empty-icon {
 
 .memo-eliminated-tray.hidden {
   display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .memo-eliminated-tray.is-drag-over {
@@ -7088,34 +7106,89 @@ body.theme-sepia .honeycomb-empty-icon {
 }
 .author-episode-bar {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 10px;
   margin-bottom: 14px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border: 1.5px solid rgba(212, 175, 55, 0.5);
   border-radius: 12px;
   background: rgba(212, 175, 55, 0.08);
+}
+.author-episode-nav-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 .author-episode-label {
   display: flex;
   align-items: center;
   gap: 8px;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 13.5px;
 }
-.author-episode-label select {
+.author-episode-label select,
+.author-import-label select {
   padding: 6px 10px;
   border-radius: 8px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
+  font-weight: 600;
+}
+.author-episode-order-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.author-episode-desc-row {
+  margin-top: -2px;
 }
 .author-episode-hint {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
+  line-height: 1.4;
+}
+.author-episode-import-box {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(212, 175, 55, 0.4);
+}
+.author-import-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
 }
 
 /* 작가 모드 전용 요소: 독자에게는 숨김 */
 body:not(.author-mode) .author-only {
   display: none !important;
+}
+
+.author-episode-import {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(212, 175, 55, 0.5);
+  font-size: 12.5px;
+}
+.author-episode-import select {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+}
+.author-episode-import label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
 }

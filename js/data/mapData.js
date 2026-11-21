@@ -330,5 +330,4 @@ export const INVESTIGATION_SCENES = {
   }
 };
 
-// 회차별 지도/조사/인물 설정 (회차 ID -> { mapLocations, investigationScenes, characters })
 export const EPISODE_DATA = {};

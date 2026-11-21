@@ -67,15 +67,34 @@ class GameState {
 
   load() {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      // v2 키 우선 검사, 없으면 v1 키 검사
+      const saved = localStorage.getItem('mystery_novel_game_state_v2') || localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved);
+        let parsed = null;
+        try {
+          parsed = JSON.parse(saved);
+        } catch (parseErr) {
+          console.warn('[GameState] JSON 파싱 실패, 기본값으로 초기화합니다.', parseErr);
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem('mystery_novel_game_state_v2');
+          return JSON.parse(JSON.stringify(DEFAULT_STATE));
+        }
+
+        if (!parsed || typeof parsed !== 'object') {
+          return JSON.parse(JSON.stringify(DEFAULT_STATE));
+        }
+
         const hasPocket = Object.prototype.hasOwnProperty.call(parsed, 'hasPocket')
           ? Boolean(parsed.hasPocket)
           : Boolean(parsed.currentNodeId && parsed.currentNodeId !== 'ep1_pocket_intro');
         const lastActiveMode = parsed.lastActiveMode || (parsed.mode === 'investigation' ? 'investigation' : 'story');
         const lastActiveNodeId = parsed.lastActiveNodeId || parsed.currentNodeId || DEFAULT_STATE.lastActiveNodeId;
         const lastActiveLocationId = parsed.lastActiveLocationId || parsed.currentLocationId || DEFAULT_STATE.lastActiveLocationId;
+        
+        const validEpisodeId = typeof parsed.currentEpisodeId === 'string' && parsed.currentEpisodeId.trim()
+          ? parsed.currentEpisodeId.trim()
+          : DEFAULT_STATE.currentEpisodeId;
+
         const loadedState = {
           ...DEFAULT_STATE,
           ...parsed,
@@ -85,7 +104,7 @@ class GameState {
           lastActiveLocationId,
           // 구버전 저장 데이터 마이그레이션: 진행 상황은 유지하고 새 필드만 보강
           schemaVersion: 2,
-          currentEpisodeId: typeof parsed.currentEpisodeId === 'string' ? parsed.currentEpisodeId : DEFAULT_STATE.currentEpisodeId,
+          currentEpisodeId: validEpisodeId,
           completedEpisodes: Array.isArray(parsed.completedEpisodes)
             ? parsed.completedEpisodes.filter((id) => typeof id === 'string')
             : [],
@@ -95,20 +114,21 @@ class GameState {
             : hasPocket,
           player: {
             ...DEFAULT_STATE.player,
-            ...(parsed.player || {}),
+            ...(parsed.player && typeof parsed.player === 'object' ? parsed.player : {}),
             stats: {
               ...DEFAULT_STATE.player.stats,
-              ...((parsed.player && parsed.player.stats) || {})
+              ...((parsed.player && typeof parsed.player === 'object' && parsed.player.stats) || {})
             }
           },
+          inventory: Array.isArray(parsed.inventory) ? parsed.inventory : DEFAULT_STATE.inventory,
           readerSettings: {
             ...DEFAULT_STATE.readerSettings,
-            ...(parsed.readerSettings || {})
+            ...(parsed.readerSettings && typeof parsed.readerSettings === 'object' ? parsed.readerSettings : {})
           },
           unlockedCodex: (() => {
             const raw = {
               ...DEFAULT_STATE.unlockedCodex,
-              ...(parsed.unlockedCodex || {})
+              ...(parsed.unlockedCodex && typeof parsed.unlockedCodex === 'object' ? parsed.unlockedCodex : {})
             };
             delete raw.ep_01;
             delete raw.char_aren;
@@ -118,7 +138,7 @@ class GameState {
           })(),
           unlockedTileRecords: {
             ...DEFAULT_STATE.unlockedTileRecords,
-            ...(parsed.unlockedTileRecords || {})
+            ...(parsed.unlockedTileRecords && typeof parsed.unlockedTileRecords === 'object' ? parsed.unlockedTileRecords : {})
           }
         };
 

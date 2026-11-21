@@ -13,6 +13,7 @@ import {
   syncLiveToEpisode,
   loadEpisodeToLive,
   createEpisodeData,
+  importFromEpisode,
   getLiveEpisodeId,
   initEpisodeStore
 } from './data/episodeStore.js?v=20261121_1900';
@@ -978,15 +979,95 @@ export class AuthorEditor {
   renderEpisodeBar() {
     const ids = Object.keys(STORY_EPISODES);
     const current = getLiveEpisodeId() || ids[0];
-    const options = ids.map((id) => `<option value="${escapeHtml(id)}" ${id === current ? 'selected' : ''}>${escapeHtml(STORY_EPISODES[id].title || id)}</option>`).join('');
+    const currentIndex = ids.indexOf(current);
+    const label = (id, index) => `제${index + 1}화. ${STORY_EPISODES[id].title || id}`;
+    const options = ids.map((id, index) => `<option value="${escapeHtml(id)}" ${id === current ? 'selected' : ''}>${escapeHtml(label(id, index))}</option>`).join('');
+    
+    // 가져올 원본 회차 목록 (기본값: 바로 직전 회차)
+    const sources = ids.filter((id) => id !== current);
+    const defaultSource = currentIndex > 0 ? ids[currentIndex - 1] : (sources[0] || '');
+    const sourceOptions = sources.map((id) => {
+      const idx = ids.indexOf(id);
+      return `<option value="${escapeHtml(id)}" ${id === defaultSource ? 'selected' : ''}>${escapeHtml(label(id, idx))}</option>`;
+    }).join('');
+
+    const importSection = sources.length ? `
+      <div class="author-episode-import-box">
+        <label class="author-import-label">
+          <span>📋 복사할 원본 회차:</span>
+          <select data-import-source aria-label="가져올 원본 회차 선택">${sourceOptions}</select>
+        </label>
+        ${actionButton('📥 이전 회차 타일·배치 가져오기', 'import-from-episode', 'is-primary')}
+        <span class="author-episode-hint">선택한 회차의 지도 타일, 구역 상태, 조사 장면, 인물 배치를 깊은 복사(Deep Copy)로 가져옵니다. 원본 회차는 안전하게 유지됩니다.</span>
+      </div>` : '';
+
     return `
       <div class="author-episode-bar">
-        <label class="author-episode-label">📚 편집할 회차
-          <select data-author-field="editorEpisodeSelect" aria-label="편집할 회차 선택">${options}</select>
-        </label>
-        ${actionButton('+ 새 회차 추가', 'add-episode', 'is-primary')}
-        <span class="author-episode-hint">선택한 회차의 본문 · 선택지 · 지도 · 조사 지점 · 인물 설정만 수정됩니다. 다른 회차는 영향받지 않습니다.</span>
+        <div class="author-episode-nav-row">
+          <label class="author-episode-label">📚 현재 편집 회차:
+            <select data-author-field="editorEpisodeSelect" aria-label="편집할 회차 선택">${options}</select>
+          </label>
+          <div class="author-episode-order-buttons">
+            ${actionButton('위로 이동(▲)', 'move-episode-up')}
+            ${actionButton('아래로 이동(▼)', 'move-episode-down')}
+            ${actionButton('+ 새 회차 추가', 'add-episode', 'is-primary')}
+          </div>
+        </div>
+        <div class="author-episode-desc-row">
+          <span class="author-episode-hint">선택한 회차의 본문 · 선택지 · 지도 · 조사 지점 · 인물 설정만 독립적으로 수정됩니다. 새 회차 추가 시 직전 회차의 타일과 배치를 깊은 복사하여 시작합니다.</span>
+        </div>
+        ${importSection}
       </div>`;
+  }
+
+  moveEpisode(delta) {
+    const ids = Object.keys(STORY_EPISODES);
+    const id = getLiveEpisodeId() || ids[0];
+    const from = ids.indexOf(id);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= ids.length) {
+      this.setStatus('더 이상 순서를 변경할 수 없습니다.', true);
+      return;
+    }
+    // 회차 순서 교환
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    const reordered = {};
+    ids.forEach((key) => { reordered[key] = STORY_EPISODES[key]; });
+    replaceObject(STORY_EPISODES, reordered);
+    this.persist();
+    this.render();
+    this.setStatus(`회차 순서가 변경되었습니다: [${STORY_EPISODES[id]?.title || id}] → ${to + 1}번째`);
+    this.saveToDisk();
+  }
+
+  importEpisodeParts() {
+    const sourceSelect = this.panel?.querySelector('[data-import-source]');
+    const sourceId = sourceSelect?.value;
+    if (!sourceId) {
+      this.setStatus('가져올 원본 회차를 선택해 주세요.', true);
+      return;
+    }
+    const currentId = getLiveEpisodeId();
+    if (sourceId === currentId) {
+      this.setStatus('현재 편집 중인 회차와 동일한 회차입니다.', true);
+      return;
+    }
+    const sourceTitle = STORY_EPISODES[sourceId]?.title || sourceId;
+    const currentTitle = STORY_EPISODES[currentId]?.title || currentId;
+    
+    if (!confirm(`[${sourceTitle}]의 지도 타일, 구역 상태, 조사 장면, 인물 배치 데이터를 [${currentTitle}]로 복사해옵니다.\n\n(모든 데이터는 독립된 Deep Copy로 복제되므로 이후 수정해도 [${sourceTitle}] 원본은 절대 변경되지 않습니다)\n\n계속하시겠습니까?`)) {
+      return;
+    }
+
+    const result = importFromEpisode(sourceId);
+    this.selectedCharacterId = CODEX_DATA.find((item) => item.category === 'character')?.id || '';
+    this.selectedLocationId = MAP_LOCATIONS[0]?.id || '';
+    this.selectedInvestigationSceneId = Object.keys(INVESTIGATION_SCENES)[0] || '';
+    this.selectedHotspotIndex = 0;
+    this.persist();
+    this.render();
+    this.setStatus(`[${sourceTitle}]의 타일 및 배치 데이터를 성공적으로 가져왔습니다 (타일 ${result.tiles}개, 장소 ${result.locations}개, 조사장면 ${result.scenes}개, 인물 ${result.characters}명).`);
+    this.saveToDisk();
   }
 
   switchEpisode(episodeId) {
@@ -1008,6 +1089,7 @@ export class AuthorEditor {
   addEpisode() {
     syncLiveToEpisode();
     const ids = Object.keys(STORY_EPISODES);
+    const previousEpisodeId = ids[ids.length - 1];
     let n = ids.length + 1;
     let id = `ep${n}`;
     while (STORY_EPISODES[id]) {
@@ -1032,8 +1114,8 @@ export class AuthorEditor {
       paragraphs: ['새 회차의 본문을 입력하세요.'],
       choices: []
     };
-    // 현재 편집 중인 회차의 지도/조사/인물을 복사하여 독립된 새 객체로 생성
-    createEpisodeData(id, getLiveEpisodeId());
+    // 마지막(직전) 회차의 타일 · 장소 · 조사 · 인물을 복사하여 독립된 새 객체로 생성
+    createEpisodeData(id, previousEpisodeId);
     this.switchEpisode(id);
     this.persist();
     this.render();
@@ -1087,6 +1169,9 @@ export class AuthorEditor {
     else if (action === 'export') this.exportData();
     else if (action === 'import') this.fileInput?.click();
     else if (action === 'add-episode') this.addEpisode();
+    else if (action === 'move-episode-up') this.moveEpisode(-1);
+    else if (action === 'move-episode-down') this.moveEpisode(1);
+    else if (action === 'import-from-episode') this.importEpisodeParts();
     else if (action === 'add-story-node') this.addStoryNode();
     else if (action === 'delete-story-node') this.deleteStoryNode();
     else if (action === 'test-story-node') {
