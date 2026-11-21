@@ -2,16 +2,16 @@
  * Main Application Controller
  */
 
-import { state } from './state.js?v=20261121_1440';
-import { GameEngine } from './engine.js?v=20261121_1440';
-import { RotaryWheel } from './wheel.js?v=20261121_1440';
-import { HexBoard } from './hexBoard.js?v=20261121_1440';
-import { MemoBoard } from './memoBoard.js?v=20261121_1440';
-import { IsometricMap } from './isometricMap.js?v=20261121_1440';
-import { CODEX_CATEGORIES, CODEX_DATA, CLUE_RECIPES } from './data/codexData.js?v=20261121_1440';
-import { MAP_LOCATIONS, INVESTIGATION_SCENES } from './data/mapData.js?v=20261121_1440';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1440';
-import { AuthorEditor, applySavedAuthorData } from './authorEditor.js?v=20261121_1440';
+import { state } from './state.js?v=20261121_1455';
+import { GameEngine } from './engine.js?v=20261121_1455';
+import { RotaryWheel } from './wheel.js?v=20261121_1455';
+import { HexBoard } from './hexBoard.js?v=20261121_1455';
+import { MemoBoard } from './memoBoard.js?v=20261121_1455';
+import { IsometricMap } from './isometricMap.js?v=20261121_1455';
+import { CODEX_CATEGORIES, CODEX_DATA, CLUE_RECIPES } from './data/codexData.js?v=20261121_1455';
+import { MAP_LOCATIONS, INVESTIGATION_SCENES } from './data/mapData.js?v=20261121_1455';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1455';
+import { AuthorEditor, applySavedAuthorData } from './authorEditor.js?v=20261121_1455';
 
 const AUTHOR_DATA_LOAD_RESULT = applySavedAuthorData();
 window.state = state;

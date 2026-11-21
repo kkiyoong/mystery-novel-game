@@ -2,10 +2,10 @@
  * Narrative Branching Engine & Layton-Style Investigation Controller
  */
 
-import { state } from './state.js?v=20261121_1440';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1440';
-import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_1440';
-import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_1440';
+import { state } from './state.js?v=20261121_1455';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1455';
+import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_1455';
+import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_1455';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;',
@@ -3089,81 +3089,118 @@ export class GameEngine {
 
     const skipHint = document.createElement('div');
     skipHint.className = 'messenger-skip-hint';
-    skipHint.textContent = '💬 대화가 진행 중입니다 (1초 간격) — 터치하거나 스크롤하면 한 번에 표시합니다';
+    skipHint.textContent = '💬 1.5초 간격으로 진행됩니다 — 클릭하거나 스크롤하면 다음 대화가 바로 뜹니다';
     container.appendChild(skipHint);
 
     let revealedCount = 0;
     let isFullyRevealed = false;
+    let autoTimer = null;
 
-    const revealAllRemaining = () => {
-      if (isFullyRevealed) return;
-      isFullyRevealed = true;
-      if (this.messengerRevealTimers) {
-        this.messengerRevealTimers.forEach((t) => clearTimeout(t));
-        this.messengerRevealTimers = [];
-      }
-      while (revealedCount < domNodes.length) {
-        container.appendChild(domNodes[revealedCount]);
-        revealedCount++;
-      }
-      if (skipHint.parentNode) skipHint.remove();
-      this.initNovelTypewriters(container);
-      this.bindInlineStoryWidgets(container);
+    const revealNextEntry = () => {
+      if (isFullyRevealed || revealedCount >= domNodes.length) return false;
+      const nextNode = domNodes[revealedCount];
+      container.appendChild(nextNode);
+      revealedCount++;
+      this.bindInlineStoryWidgets(nextNode);
       if (scrollBox) {
-        scrollBox.scrollTop = scrollBox.scrollHeight;
+        scrollBox.scrollTo({
+          top: scrollBox.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+      if (revealedCount >= domNodes.length) {
+        isFullyRevealed = true;
+        if (autoTimer) {
+          clearTimeout(autoTimer);
+          autoTimer = null;
+        }
+        if (skipHint.parentNode) skipHint.remove();
+        this.initNovelTypewriters(container);
+      }
+      return true;
+    };
+
+    const scheduleNextAuto = () => {
+      if (autoTimer) clearTimeout(autoTimer);
+      if (isFullyRevealed || revealedCount >= domNodes.length) return;
+      autoTimer = setTimeout(() => {
+        if (!isFullyRevealed) {
+          revealNextEntry();
+          if (!isFullyRevealed) {
+            scheduleNextAuto();
+          }
+        }
+      }, 1500);
+      this.messengerRevealTimers = [autoTimer];
+    };
+
+    // First bubble is shown immediately
+    revealNextEntry();
+    if (!isFullyRevealed) {
+      scheduleNextAuto();
+    }
+
+    const stepForwardByUser = () => {
+      if (isFullyRevealed) return;
+      revealNextEntry();
+      if (!isFullyRevealed) {
+        // Reset the 1.5s timer so user gets a fresh 1.5s after their manual trigger
+        scheduleNextAuto();
       }
     };
 
     skipHint.addEventListener('click', (e) => {
       e.stopPropagation();
-      revealAllRemaining();
+      stepForwardByUser();
     });
 
     if (scrollBox) {
-      const handleUserInterruption = (e) => {
+      let touchStartY = null;
+      let lastScrollAdvanceTime = 0;
+
+      scrollBox.onclick = (e) => {
         if (e && e.target && e.target.closest('button, a, .story-game-widget, input, select')) return;
-        if (!isFullyRevealed && revealedCount < domNodes.length) {
-          revealAllRemaining();
+        stepForwardByUser();
+      };
+
+      scrollBox.ontouchstart = (e) => {
+        if (e.touches && e.touches.length > 0) {
+          touchStartY = e.touches[0].clientY;
         }
       };
 
-      scrollBox.onclick = handleUserInterruption;
-      scrollBox.ontouchstart = handleUserInterruption;
-      scrollBox.onwheel = (e) => {
-        if (!isFullyRevealed && Math.abs(e.deltaY) > 2) {
-          revealAllRemaining();
+      scrollBox.ontouchmove = (e) => {
+        if (touchStartY === null || isFullyRevealed) return;
+        const currentY = e.touches[0].clientY;
+        const diff = touchStartY - currentY; // positive = dragging up (scrolling down)
+        const now = Date.now();
+        if (diff > 25 && now - lastScrollAdvanceTime > 250) {
+          lastScrollAdvanceTime = now;
+          touchStartY = currentY;
+          stepForwardByUser();
         }
       };
-      scrollBox.ontouchmove = () => {
-        if (!isFullyRevealed && revealedCount < domNodes.length) {
-          revealAllRemaining();
+
+      scrollBox.ontouchend = () => {
+        touchStartY = null;
+      };
+
+      let accumulatedWheelDelta = 0;
+      scrollBox.onwheel = (e) => {
+        if (isFullyRevealed) return;
+        if (e.deltaY > 0) {
+          accumulatedWheelDelta += e.deltaY;
+          const now = Date.now();
+          if (accumulatedWheelDelta >= 40 && now - lastScrollAdvanceTime > 200) {
+            lastScrollAdvanceTime = now;
+            accumulatedWheelDelta = 0;
+            stepForwardByUser();
+          }
+        } else if (e.deltaY < 0) {
+          accumulatedWheelDelta = 0;
         }
       };
     }
-
-    domNodes.forEach((nodeEl, i) => {
-      // 대화창 당 약 1초 (1000ms)
-      const delay = i === 0 ? 0 : i * 1000;
-      const timer = setTimeout(() => {
-        if (!isFullyRevealed && revealedCount <= i) {
-          container.appendChild(nodeEl);
-          revealedCount = i + 1;
-          this.bindInlineStoryWidgets(nodeEl);
-          if (scrollBox) {
-            scrollBox.scrollTo({
-              top: scrollBox.scrollHeight,
-              behavior: 'smooth'
-            });
-          }
-          if (revealedCount >= domNodes.length) {
-            isFullyRevealed = true;
-            if (skipHint.parentNode) skipHint.remove();
-            this.initNovelTypewriters(container);
-          }
-        }
-      }, delay);
-      this.messengerRevealTimers.push(timer);
-    });
   }
 
   bindInlineStoryWidgets(container) {
