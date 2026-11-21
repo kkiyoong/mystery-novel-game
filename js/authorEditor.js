@@ -481,7 +481,7 @@ export class AuthorEditor {
     this.lastFocusedTextarea = null;
 
     try {
-      if (sessionStorage.getItem('author_mode_unlocked') === '1') document.body.classList.add('author-mode');
+      sessionStorage.removeItem('author_mode_unlocked');
     } catch (e) {}
     this.initPortalPasswordModal();
     this.toggleButton?.addEventListener('click', () => this.openPortalPasswordModal());
@@ -633,8 +633,6 @@ export class AuthorEditor {
   }
 
   open() {
-    // 비밀번호 확인 후 작가 모드 진입: 작가 전용 UI(회차 목록 등) 표시 (탭을 닫으면 해제)
-    try { sessionStorage.setItem('author_mode_unlocked', '1'); } catch (e) {}
     document.body.classList.add('author-mode');
     this.syncAllItems();
     this.panel?.classList.remove('hidden');
@@ -645,6 +643,7 @@ export class AuthorEditor {
 
   close() {
     this.flushPersist();
+    document.body.classList.remove('author-mode');
     this.panel?.classList.add('hidden');
     this.toggleButton?.setAttribute('aria-expanded', 'false');
     // 편집기에서 보던 회차와 게임 진행 회차가 다를 수 있으므로 게임 회차 데이터로 복원
@@ -1158,6 +1157,9 @@ export class AuthorEditor {
     if (!button) return;
     const action = button.dataset.authorAction;
     if (action === 'close') this.close();
+    else if (action === 'open-toc') {
+      window.gameApp?.openStoryToc?.();
+    }
     else if (action === 'connect-folder') this.connectProjectFolder();
     else if (action === 'save-disk') this.saveToDisk(true);
     else if (action === 'reset-cache') {
