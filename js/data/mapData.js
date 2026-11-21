@@ -433,7 +433,7 @@ export const INVESTIGATION_SCENES = {
                 "nextNode": "q_1795259236049",
                 "condition": {
                   "stat": {
-                    "social": 14
+                    "social": 4
                   }
                 }
               },
@@ -1028,7 +1028,7 @@ export const EPISODE_DATA = {
                     "nextNode": "q_1795259236049",
                     "condition": {
                       "stat": {
-                        "social": 14
+                        "social": 4
                       }
                     }
                   },

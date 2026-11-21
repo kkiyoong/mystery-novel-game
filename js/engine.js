@@ -452,8 +452,9 @@ export class GameEngine {
         const evaluation = this.evaluateCondition(choice.condition, choice);
         const disabledAttr = evaluation.met ? '' : 'disabled aria-disabled="true"';
         let disabledClass = evaluation.met ? '' : 'is-disabled';
-        const badgeHtml = choice.requirementText
-          ? `<span class="choice-requirement ${evaluation.met ? 'req-met' : 'req-unmet'}">${escapeHtml(choice.requirementText)}</span>`
+        const reqText = choice.requirementText || this.getConditionStatText(choice.condition);
+        const badgeHtml = reqText
+          ? `<span class="choice-requirement ${evaluation.met ? 'req-met' : 'req-unmet'}">${escapeHtml(reqText.startsWith('[') && reqText.endsWith(']') ? reqText : `[${reqText}]`)}</span>`
           : '';
 
         const isMapChoice = Boolean(
@@ -2359,6 +2360,27 @@ export class GameEngine {
     return { met: true };
   }
 
+  getConditionStatText(condition) {
+    if (!condition) return '';
+    const statNames = {
+      magic: '마법',
+      knowledge: '지식',
+      perception: '관찰력',
+      social: '사교력',
+      persuasion: '사교력',
+      stamina: '체력'
+    };
+    if (condition.stat && typeof condition.stat === 'object') {
+      const parts = [];
+      for (const [statKey, reqVal] of Object.entries(condition.stat)) {
+        const name = statNames[statKey] || statKey;
+        parts.push(`${name} ${reqVal} 필요`);
+      }
+      if (parts.length > 0) return parts.join(', ');
+    }
+    return '';
+  }
+
   selectChoice(node, choiceIndex, choiceBtn = null) {
     this.flushPendingStoryUnlocks(this.storyView);
     const choice = node.choices[choiceIndex];
@@ -3641,6 +3663,8 @@ export class GameEngine {
           return;
         }
 
+        const statReqText = this.getConditionStatText(opt.condition) || opt.requirementText || '';
+
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = `dialogue-option-btn ${evaluation.met ? '' : 'is-locked'}`;
@@ -3648,10 +3672,20 @@ export class GameEngine {
           btn.disabled = true;
         }
 
+        const formattedStatReq = statReqText.startsWith('[') && statReqText.endsWith(']') ? statReqText.slice(1, -1) : statReqText;
+        const reqBadgeHtml = statReqText
+          ? `<span class="opt-stat-badge ${evaluation.met ? 'req-met' : 'req-unmet'}">[${escapeHtml(formattedStatReq)}]</span>`
+          : '';
+
+        const lockHintHtml = (!evaluation.met && evaluation.reason)
+          ? `<span class="opt-lock-hint">(${escapeHtml(evaluation.reason)})</span>`
+          : '';
+
         btn.innerHTML = `
           <span class="opt-bullet">${evaluation.met ? '💬' : '🔒'}</span>
           <span class="opt-text">${escapeHtml(opt.text)}</span>
-          ${!evaluation.met ? `<span class="opt-lock-hint">(${escapeHtml(evaluation.reason)})</span>` : ''}
+          ${reqBadgeHtml}
+          ${lockHintHtml}
         `;
 
         btn.addEventListener('click', () => {
