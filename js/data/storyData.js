@@ -28,6 +28,7 @@ export const STORY_NODES = {
       "단정하게 빗어 넘긴 금발에 흐트러짐 하나 없는 교복. 반듯한 이목구비와 곧게 편 자세까지. 어딜 보아도 수석 모범생다운 모습이었다.",
       "[빛: 칼릭스 모티머]",
       "[인물: 칼릭스 | 수석 입학생 | 🕵️]",
+      "[설명창: 새로운 기록을 확인하려면 주머니를 열어보자. | 💡]",
       "“아, 칼릭스.”",
       "“누구와 대화한 거지?”",
       "“대화는 무슨, 그냥…… 책에서 본 내용을 떠올리고 있었어.”",
@@ -215,7 +216,8 @@ export const STORY_NODES = {
       "이왕 시작한 아카데미 생활.",
       "첫 수업부터 낙제할 수는 없으니까.",
       "어디로 가볼까?",
-      "[설명창: 탐색을 해보자. 정답을 맞추려면 강의실로 돌아오자. | 💡]"
+      "[설명창: 탐색을 해보자. 정답을 맞추려면 강의실로 돌아오자. | 💡]",
+      "[설명창: 어디로 가야할 지 모를 때는 주머니 > 지도를 보자. | 💡]"
     ],
     "choices": [
       {
@@ -307,7 +309,13 @@ export const STORY_NODES = {
         "nextNode": "story_1795192473432",
         "isInvestigationTrigger": true,
         "locationId": "loc_garden",
-        "hideIfChosen": false
+        "hideIfChosen": false,
+        "effects": {
+          "rewardStat": {
+            "perception": 1,
+            "stamina": 1
+          }
+        }
       }
     ]
   },
@@ -595,7 +603,12 @@ export const STORY_NODES = {
         "nextNode": "story_1795192473432",
         "hideIfChosen": false,
         "isInvestigationTrigger": true,
-        "locationId": "loc_lab"
+        "locationId": "loc_lab",
+        "effects": {
+          "rewardStat": {
+            "perception": 1
+          }
+        }
       }
     ]
   }

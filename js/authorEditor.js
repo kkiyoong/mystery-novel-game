@@ -466,6 +466,13 @@ export class AuthorEditor {
     this.memoViewMode = 'all'; // 'all' (한눈에 보기), 'single' (단일 상세 폼), 'recipes' (레시피)
     this.tileSearchQuery = '';
     this.tileFilterRole = 'all'; // 'all', 'topic', 'clue', 'subitem'
+    this.storyViewMode = 'form'; // 'form' (기본 편집 모드) | 'graph' (연결 맵/노드 뷰)
+    this.graphPan = { x: 50, y: 50 };
+    this.graphZoom = 1;
+    this.graphDraggingNode = null;
+    this.graphPanning = null;
+    this.graphConnectingWire = null;
+    this.graphQuickEditNodeId = null;
     this.panel = document.getElementById('author-editor');
     this.content = document.getElementById('author-editor-content');
     this.status = document.getElementById('author-editor-status');
@@ -498,6 +505,7 @@ export class AuthorEditor {
     this.panel?.addEventListener('input', (event) => this.handleField(event));
     this.panel?.addEventListener('change', (event) => this.handleField(event));
     this.fileInput?.addEventListener('change', (event) => this.importFile(event));
+    this.initGraphListeners();
 
     if (loadError) this.setStatus(`저장된 편집 데이터를 불러오지 못했습니다: ${loadError}`, true);
     this.render();
@@ -1224,6 +1232,70 @@ export class AuthorEditor {
     else if (action === 'add-choice') this.addChoice();
     else if (action === 'add-imported-choice') this.addImportedChoice();
     else if (action.startsWith('delete-choice:')) this.deleteChoice(Number(action.split(':')[1]));
+    else if (action.startsWith('set-story-view-mode:')) {
+      this.storyViewMode = action.split(':')[1];
+      this.render();
+    }
+    else if (action === 'auto-layout-story-graph') {
+      this.autoLayoutNodes(true);
+    }
+    else if (action === 'zoom-in-graph') {
+      this.graphZoom = Math.min(2.0, Number((this.graphZoom * 1.15).toFixed(2)));
+      this.updateGraphTransform();
+    }
+    else if (action === 'zoom-out-graph') {
+      this.graphZoom = Math.max(0.35, Number((this.graphZoom / 1.15).toFixed(2)));
+      this.updateGraphTransform();
+    }
+    else if (action === 'zoom-reset-graph') {
+      this.graphZoom = 1.0;
+      this.graphPan = { x: 50, y: 50 };
+      this.updateGraphTransform();
+    }
+    else if (action.startsWith('select-graph-node:')) {
+      const nid = action.split(':')[1];
+      this.selectedStoryNodeId = nid;
+      this.graphQuickEditNodeId = nid;
+      this.render();
+    }
+    else if (action === 'close-quick-edit') {
+      this.graphQuickEditNodeId = null;
+      this.render();
+    }
+    else if (action.startsWith('open-full-editor:')) {
+      const nid = action.split(':')[1];
+      this.selectedStoryNodeId = nid;
+      this.storyViewMode = 'form';
+      this.render();
+    }
+    else if (action.startsWith('add-choice-to-node:')) {
+      const nid = action.split(':')[1];
+      const targetNode = STORY_NODES[nid];
+      if (targetNode) {
+        if (!targetNode.choices) targetNode.choices = [];
+        targetNode.choices.push({
+          text: '새로운 선택지',
+          nextNode: '',
+          hideIfChosen: false
+        });
+        this.persist();
+        this.render();
+      }
+    }
+    else if (action.startsWith('delete-quick-choice:')) {
+      const parts = action.split(':');
+      const nid = parts[1];
+      const cIdx = Number(parts[2]);
+      const targetNode = STORY_NODES[nid];
+      if (targetNode && targetNode.choices && targetNode.choices[cIdx]) {
+        targetNode.choices.splice(cIdx, 1);
+        this.persist();
+        this.render();
+      }
+    }
+    else if (action.startsWith('click-graph-link:')) {
+      this.handleGraphLinkClick(action);
+    }
     else if (action === 'add-location') this.addLocation();
     else if (action.startsWith('select-hotspot:')) {
       this.selectedHotspotIndex = Number(action.split(':')[1]);
@@ -2503,19 +2575,36 @@ export class AuthorEditor {
 
   updateField(control, value, isTextTyping = false) {
     const name = control.dataset.authorField;
+    const targetNodeId = control.dataset.quickEditNodeId || this.selectedStoryNodeId;
     if (name === 'storyCompletesEpisode') {
-      const target = STORY_NODES[this.selectedStoryNodeId];
+      const target = STORY_NODES[targetNodeId];
       if (target) target.completesEpisode = Boolean(value);
       return false;
     }
     if (name === 'storyReturnToHub') {
-      const target = STORY_NODES[this.selectedStoryNodeId];
+      const target = STORY_NODES[targetNodeId];
       if (target) target.returnToHub = Boolean(value);
+      return false;
+    }
+    if (name === 'storySuccessSceneId') {
+      const target = STORY_NODES[targetNodeId];
+      if (target) {
+        if (value) target.successSceneId = value;
+        else delete target.successSceneId;
+      }
+      return false;
+    }
+    if (name === 'storyFailSceneId') {
+      const target = STORY_NODES[targetNodeId];
+      if (target) {
+        if (value) target.failSceneId = value;
+        else delete target.failSceneId;
+      }
       return false;
     }
     if (name === 'episodeTitle' || name === 'storyNodeTitle' || name === 'storyChapter' ||
         name === 'storyLocationName' || name === 'storySummary' || name === 'storyParagraphs' || name === 'storyIsHubNode') {
-      const node = STORY_NODES[this.selectedStoryNodeId];
+      const node = STORY_NODES[targetNodeId];
       if (!node) return false;
       if (name === 'episodeTitle') {
         const episode = STORY_EPISODES[node.episodeId];
@@ -2541,8 +2630,26 @@ export class AuthorEditor {
       }
       return false;
     }
+    if (name === 'choiceSuccessSceneId') {
+      const node = STORY_NODES[targetNodeId];
+      const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
+      if (choice) {
+        if (value) choice.successSceneId = value;
+        else delete choice.successSceneId;
+      }
+      return false;
+    }
+    if (name === 'choiceFailSceneId') {
+      const node = STORY_NODES[targetNodeId];
+      const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
+      if (choice) {
+        if (value) choice.failSceneId = value;
+        else delete choice.failSceneId;
+      }
+      return false;
+    }
     if (name === 'choiceHideIfChosen') {
-      const node = STORY_NODES[this.selectedStoryNodeId];
+      const node = STORY_NODES[targetNodeId];
       const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
       if (choice) {
         choice.hideIfChosen = Boolean(value);
@@ -2550,7 +2657,7 @@ export class AuthorEditor {
       return false;
     }
     if (name === 'choiceReturnToHub') {
-      const node = STORY_NODES[this.selectedStoryNodeId];
+      const node = STORY_NODES[targetNodeId];
       const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
       if (choice) {
         choice.returnToHub = Boolean(value);
@@ -2558,7 +2665,7 @@ export class AuthorEditor {
       return false;
     }
     if (name === 'choiceRequiresFlags') {
-      const node = STORY_NODES[this.selectedStoryNodeId];
+      const node = STORY_NODES[targetNodeId];
       const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
       if (choice) {
         const raw = String(value || '').trim();
@@ -2571,7 +2678,7 @@ export class AuthorEditor {
       return false;
     }
     if (name === 'choiceLockBehavior') {
-      const node = STORY_NODES[this.selectedStoryNodeId];
+      const node = STORY_NODES[targetNodeId];
       const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
       if (choice) {
         choice.lockBehavior = value;
@@ -2579,7 +2686,7 @@ export class AuthorEditor {
       return false;
     }
     if (name === 'choiceSetFlags') {
-      const node = STORY_NODES[this.selectedStoryNodeId];
+      const node = STORY_NODES[targetNodeId];
       const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
       if (choice) {
         const raw = String(value || '').trim();
@@ -2592,7 +2699,7 @@ export class AuthorEditor {
       return false;
     }
     if (name === 'choiceIsConclusion') {
-      const node = STORY_NODES[this.selectedStoryNodeId];
+      const node = STORY_NODES[targetNodeId];
       const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
       if (choice) {
         choice.isConclusionChoice = Boolean(value);
@@ -2600,7 +2707,7 @@ export class AuthorEditor {
       return false;
     }
     if (name === 'choiceText' || name === 'choiceDesc' || name === 'choiceTarget' || name.startsWith('choiceStat:')) {
-      const node = STORY_NODES[this.selectedStoryNodeId];
+      const node = STORY_NODES[targetNodeId];
       const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
       if (!choice) return false;
       if (name === 'choiceText') choice.text = value;
@@ -3161,6 +3268,28 @@ export class AuthorEditor {
     }
     if (!node) return '<p>편집할 이야기가 없습니다.</p>';
     this.selectedStoryNodeId = node.id;
+
+    const viewModeSwitcher = `
+      <div class="author-story-view-modes-bar">
+        <div class="author-tabs" style="margin-bottom: 0;">
+          <button type="button" class="author-tab${this.storyViewMode === 'form' ? ' is-active' : ''}" data-author-action="set-story-view-mode:form">
+            <span>📝 기본 편집 모드</span>
+          </button>
+          <button type="button" class="author-tab${this.storyViewMode === 'graph' ? ' is-active' : ''}" data-author-action="set-story-view-mode:graph">
+            <span>🗺️ 연결 맵 (노드 뷰)</span>
+          </button>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+          ${this.storyViewMode === 'graph'
+            ? '<span>💡 카드를 드래그해 배치하고, 우측 원형 포트(➔/✨/❌)를 드래그해 다른 카드에 연결하세요. 선이나 배지를 클릭하면 분기 대상을 변경/해제할 수 있습니다.</span>'
+            : '<span>💡 장면의 본문과 선택지, 정답/오답 이동 분기를 상세하게 편집합니다.</span>'}
+        </div>
+      </div>
+    `;
+
+    if (this.storyViewMode === 'graph') {
+      return viewModeSwitcher + this.renderStoryGraph(node, episodeNodes, editorEpisodeId);
+    }
     const episode = STORY_EPISODES[node.episodeId] || {};
     const episodeGroups = new Map();
     episodeNodes.forEach((entry) => {
@@ -3280,6 +3409,22 @@ export class AuthorEditor {
               <input type="text" data-author-field="choiceSetFlags" data-choice-index="${index}" value="${escapeHtml(Array.isArray(choice.setFlags) ? choice.setFlags.join(', ') : (choice.setFlags || ''))}" placeholder="예: flag_explored_lab, clue_unlocked" style="width: 100%; padding: 6px 8px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px;" />
             </div>
           </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; background: #f0fdf4; padding: 10px; border-radius: 8px; border: 1.5px solid #bbf7d0;">
+            <div>
+              <label style="display: block; font-size: 11px; font-weight: 700; color: #166534; margin-bottom: 4px;">✨ 정답 시 이동 장면 (choice.successSceneId)</label>
+              <select data-author-field="choiceSuccessSceneId" data-choice-index="${index}" class="author-select" style="width: 100%; font-size: 11.5px; padding: 4px 6px; background: #ffffff;">
+                <option value="">-- 기본 대상 사용 (위 [이동할 곳] 참조) --</option>
+                ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}" ${choice.successSceneId === n.id ? 'selected' : ''}>[본문] ${escapeHtml(n.title || n.id)} (${escapeHtml(n.id)})</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="display: block; font-size: 11px; font-weight: 700; color: #991b1b; margin-bottom: 4px;">❌ 오답 시 이동 장면 (choice.failSceneId)</label>
+              <select data-author-field="choiceFailSceneId" data-choice-index="${index}" class="author-select" style="width: 100%; font-size: 11.5px; padding: 4px 6px; background: #ffffff;">
+                <option value="">-- 오답 분기 없음 --</option>
+                ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}" ${choice.failSceneId === n.id ? 'selected' : ''}>[본문] ${escapeHtml(n.title || n.id)} (${escapeHtml(n.id)})</option>`).join('')}
+              </select>
+            </div>
+          </div>
           <div class="author-stat-grid">
             ${STAT_FIELDS.map((stat) => {
               const statVal = stat.id === 'social' ? (stats.social ?? stats.persuasion ?? 0) : (stats[stat.id] || 0);
@@ -3370,7 +3515,7 @@ export class AuthorEditor {
       }
     });
 
-    return `
+    const formHtml = `
       <div class="author-story-editor">
         <aside class="author-story-toc" aria-label="목차">
           <div class="author-story-toc-header">
@@ -3411,6 +3556,22 @@ export class AuthorEditor {
               <input type="checkbox" data-author-field="storyReturnToHub" ${node.returnToHub ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;" />
               <span>🔄 이 지점 종료 후 탐사 허브로 복귀 (returnToHub)</span>
             </label>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; margin-bottom: 12px; background: #f0fdf4; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #bbf7d0;">
+            <div>
+              <label style="display: block; font-size: 11.5px; font-weight: 700; color: #166534; margin-bottom: 4px;">✨ 장면 기본 정답 이동 (successSceneId)</label>
+              <select data-author-field="storySuccessSceneId" class="author-select" style="width: 100%; font-size: 12px; padding: 6px 8px; background: #ffffff;">
+                <option value="">-- 정답 분기 없음 (기본 선택지 이동) --</option>
+                ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}" ${node.successSceneId === n.id ? 'selected' : ''}>[본문] ${escapeHtml(n.title || n.id)} (${escapeHtml(n.id)})</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="display: block; font-size: 11.5px; font-weight: 700; color: #991b1b; margin-bottom: 4px;">❌ 장면 기본 오답 이동 (failSceneId)</label>
+              <select data-author-field="storyFailSceneId" class="author-select" style="width: 100%; font-size: 12px; padding: 6px 8px; background: #ffffff;">
+                <option value="">-- 오답 분기 없음 --</option>
+                ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}" ${node.failSceneId === n.id ? 'selected' : ''}>[본문] ${escapeHtml(n.title || n.id)} (${escapeHtml(n.id)})</option>`).join('')}
+              </select>
+            </div>
           </div>
           <div class="author-story-summary-section" style="margin-top: 10px; margin-bottom: 14px;">
             ${field('최근 사건 요약 (홈 화면 [최근 진행 위치] 카드 표시용)', 'storySummary', node.summary || '', 'textarea', { attributes: 'rows="2" placeholder="이 장면에 도달했을 때 홈 화면의 [최근 사건 요약]에 표시될 줄거리를 입력하세요."' })}
@@ -3567,6 +3728,737 @@ export class AuthorEditor {
           <div class="author-card-list">${choices || '<p class="author-empty">등록된 선택지가 없습니다.</p>'}</div>
         </section>
       </div>`;
+    return viewModeSwitcher + formHtml;
+  }
+
+  handleGraphLinkClick(action) {
+    const parts = action.split(':');
+    const fromId = parts[1];
+    const toId = parts[2];
+    const type = parts[3]; // 'normal' | 'success' | 'fail'
+    const choiceIdx = parts[4] !== undefined && parts[4] !== '' ? Number(parts[4]) : -1;
+    const fromNode = STORY_NODES[fromId];
+    if (!fromNode) return;
+    const toNode = STORY_NODES[toId];
+    const toTitle = toNode ? (toNode.title || toId) : toId;
+    const fromTitle = fromNode.title || fromId;
+    const typeLabel = type === 'success' ? '정답 분기 (successSceneId)' : (type === 'fail' ? '오답 분기 (failSceneId)' : '선택지 연결');
+
+    const confirmed = confirm(`[${fromTitle}] ➔ [${toTitle}]\n(${typeLabel})\n\n연결을 해제하시겠습니까? (확인: 해제, 취소: 유지)`);
+    if (confirmed) {
+      if (type === 'success') {
+        delete fromNode.successSceneId;
+        if (choiceIdx >= 0 && fromNode.choices?.[choiceIdx]) delete fromNode.choices[choiceIdx].successSceneId;
+      } else if (type === 'fail') {
+        delete fromNode.failSceneId;
+        if (choiceIdx >= 0 && fromNode.choices?.[choiceIdx]) delete fromNode.choices[choiceIdx].failSceneId;
+      } else {
+        if (choiceIdx >= 0 && fromNode.choices?.[choiceIdx]) {
+          fromNode.choices[choiceIdx].nextNode = '';
+        }
+      }
+      this.persist();
+      this.render();
+      this.setStatus(`[${fromTitle}] ➔ [${toTitle}] (${typeLabel}) 연결을 해제했습니다.`);
+    }
+  }
+
+  renderStoryGraph(currentNode, episodeNodes, editorEpisodeId) {
+    let needsLayout = false;
+    episodeNodes.forEach((n) => {
+      if (typeof n.editorX !== 'number' || typeof n.editorY !== 'number') {
+        needsLayout = true;
+      }
+    });
+    if (needsLayout) {
+      this.autoLayoutNodes(false);
+    }
+
+    const nodeMap = new Map(episodeNodes.map(n => [n.id, n]));
+    const links = [];
+
+    episodeNodes.forEach(srcNode => {
+      if (srcNode.successSceneId && nodeMap.has(srcNode.successSceneId)) {
+        links.push({
+          fromId: srcNode.id,
+          toId: srcNode.successSceneId,
+          type: 'success',
+          label: '정답 이동',
+          choiceIndex: -1,
+          portYOffset: 70
+        });
+      }
+      if (srcNode.failSceneId && nodeMap.has(srcNode.failSceneId)) {
+        links.push({
+          fromId: srcNode.id,
+          toId: srcNode.failSceneId,
+          type: 'fail',
+          label: '오답 이동',
+          choiceIndex: -1,
+          portYOffset: 100
+        });
+      }
+      (srcNode.choices || []).forEach((ch, chIdx) => {
+        let tid = (ch.nextNode || '').replace(/^node:/, '');
+        if (nodeMap.has(tid)) {
+          links.push({
+            fromId: srcNode.id,
+            toId: tid,
+            type: 'normal',
+            label: ch.text || '이동',
+            choiceIndex: chIdx,
+            portYOffset: 35 + chIdx * 16
+          });
+        }
+        if (ch.successSceneId && nodeMap.has(ch.successSceneId)) {
+          links.push({
+            fromId: srcNode.id,
+            toId: ch.successSceneId,
+            type: 'success',
+            label: `[정답] ${ch.text || ''}`,
+            choiceIndex: chIdx,
+            portYOffset: 70
+          });
+        }
+        if (ch.failSceneId && nodeMap.has(ch.failSceneId)) {
+          links.push({
+            fromId: srcNode.id,
+            toId: ch.failSceneId,
+            type: 'fail',
+            label: `[오답] ${ch.text || ''}`,
+            choiceIndex: chIdx,
+            portYOffset: 100
+          });
+        }
+      });
+    });
+
+    const svgLinksLayer = links.map(link => {
+      const src = nodeMap.get(link.fromId);
+      const dst = nodeMap.get(link.toId);
+      if (!src || !dst) return '';
+      const x1 = (src.editorX || 0) + 250;
+      const y1 = (src.editorY || 0) + Math.min(130, Math.max(30, link.portYOffset || 50));
+      const x2 = dst.editorX || 0;
+      const y2 = (dst.editorY || 0) + 65;
+
+      const dx = Math.max(45, Math.abs(x2 - x1) * 0.45);
+      const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+      const mx = Math.round((x1 + x2) / 2);
+      const my = Math.round((y1 + y2) / 2);
+
+      let badgeHtml = '';
+      if (link.type === 'success') {
+        badgeHtml = `
+          <g class="author-graph-badge badge-success" data-author-action="click-graph-link:${link.fromId}:${link.toId}:success:${link.choiceIndex}" transform="translate(${mx}, ${my})">
+            <rect x="-26" y="-11" width="52" height="22" rx="6" fill="#10b981" />
+            <text x="0" y="4" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">[정답]</text>
+          </g>`;
+      } else if (link.type === 'fail') {
+        badgeHtml = `
+          <g class="author-graph-badge badge-fail" data-author-action="click-graph-link:${link.fromId}:${link.toId}:fail:${link.choiceIndex}" transform="translate(${mx}, ${my})">
+            <rect x="-26" y="-11" width="52" height="22" rx="6" fill="#ef4444" />
+            <text x="0" y="4" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">[오답]</text>
+          </g>`;
+      } else {
+        const shortLabel = escapeHtml(link.label.length > 12 ? link.label.slice(0, 11) + '…' : link.label);
+        badgeHtml = `
+          <g class="author-graph-badge badge-normal" data-author-action="click-graph-link:${link.fromId}:${link.toId}:normal:${link.choiceIndex}" transform="translate(${mx}, ${my})">
+            <rect x="-35" y="-10" width="70" height="20" rx="4" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" />
+            <text x="0" y="4" text-anchor="middle" fill="#475569" font-size="10.5" font-weight="600">${shortLabel}</text>
+          </g>`;
+      }
+
+      return `
+        <g class="author-graph-link-group" data-from="${link.fromId}" data-to="${link.toId}">
+          <path d="${d}" class="author-graph-link link-${link.type}" marker-end="url(#arrow-${link.type})" data-author-action="click-graph-link:${link.fromId}:${link.toId}:${link.type}:${link.choiceIndex}" />
+          ${badgeHtml}
+        </g>`;
+    }).join('');
+
+    const cardsHtml = episodeNodes.map(node => {
+      const isSelected = node.id === this.selectedStoryNodeId;
+      const isQuickEdit = node.id === this.graphQuickEditNodeId;
+      const snippet = (node.paragraphs?.[0] || node.summary || '본문 없음').replace(/\[.*?\]/g, '').trim().slice(0, 48);
+      const choiceCount = node.choices?.length || 0;
+      const hasBranches = node.successSceneId || node.failSceneId;
+
+      return `
+        <div class="author-graph-card${isSelected ? ' is-selected' : ''}${isQuickEdit ? ' is-quick-editing' : ''}"
+             data-graph-node-id="${escapeHtml(node.id)}"
+             style="transform: translate(${node.editorX || 50}px, ${node.editorY || 50}px);">
+          <div class="author-graph-port port-in" data-port-type="in" data-node-id="${escapeHtml(node.id)}" title="진입 지점 (In-Port)"></div>
+          
+          <div class="author-graph-card-header" data-node-drag-handle="${escapeHtml(node.id)}">
+            <div class="author-graph-card-title-row">
+              <span class="author-graph-card-icon">${node.isHubNode ? '🧭' : (node.completesEpisode ? '🏁' : '📄')}</span>
+              <strong class="author-graph-card-title" title="${escapeHtml(node.title || node.id)}">${escapeHtml(node.title || node.id)}</strong>
+            </div>
+            <div class="author-graph-card-actions">
+              <button type="button" class="author-graph-btn-edit" data-author-action="select-graph-node:${escapeHtml(node.id)}" title="빠른 편집 열기">✏️</button>
+              <button type="button" class="author-graph-btn-full" data-author-action="open-full-editor:${escapeHtml(node.id)}" title="상세 편집 모드로 열기">🔍</button>
+            </div>
+          </div>
+
+          <div class="author-graph-card-body" data-author-action="select-graph-node:${escapeHtml(node.id)}">
+            <div class="author-graph-card-meta">
+              <span>📍 ${escapeHtml(node.locationName || '현위치 미지정')}</span>
+              ${node.chapter ? `<span>· ${escapeHtml(node.chapter)}</span>` : ''}
+            </div>
+            <p class="author-graph-card-snippet">${escapeHtml(snippet || '내용 없음')}</p>
+            ${hasBranches ? `
+              <div class="author-graph-card-branches">
+                ${node.successSceneId ? `<span class="branch-tag success" title="정답: ${escapeHtml(node.successSceneId)}">✨ 정답</span>` : ''}
+                ${node.failSceneId ? `<span class="branch-tag fail" title="오답: ${escapeHtml(node.failSceneId)}">❌ 오답</span>` : ''}
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="author-graph-card-footer">
+            <div class="author-graph-card-choice-summary">
+              <span>선택지 ${choiceCount}개</span>
+              <button type="button" class="author-graph-btn-add-choice" data-author-action="add-choice-to-node:${escapeHtml(node.id)}" title="새 선택지 추가">+ 선택지</button>
+            </div>
+          </div>
+
+          <div class="author-graph-ports-out-wrap">
+            <div class="author-graph-port port-out port-normal" data-port-type="normal" data-node-id="${escapeHtml(node.id)}" title="일반 분기 연결 (드래그하여 다른 장면에 놓기)">➔</div>
+            <div class="author-graph-port port-out port-success" data-port-type="success" data-node-id="${escapeHtml(node.id)}" title="✨ 정답 이동 연결 (successSceneId)">✨</div>
+            <div class="author-graph-port port-out port-fail" data-port-type="fail" data-node-id="${escapeHtml(node.id)}" title="❌ 오답 이동 연결 (failSceneId)">❌</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    const quickEditNode = this.graphQuickEditNodeId ? STORY_NODES[this.graphQuickEditNodeId] : null;
+    const quickPanelHtml = quickEditNode ? `
+      <aside class="author-graph-quick-panel">
+        ${this.renderGraphQuickEditPanel(quickEditNode, episodeNodes)}
+      </aside>
+    ` : '';
+
+    return `
+      <div class="author-node-graph-wrapper">
+        <div class="author-node-graph-toolbar">
+          <div class="author-button-row">
+            <button type="button" class="author-action is-primary" data-author-action="auto-layout-story-graph" title="장면 카드를 순서대로 자동 정렬">🪄 자동 정렬 (Auto Layout)</button>
+            <button type="button" class="author-action" data-author-action="add-story-node">+ 새 장면 추가</button>
+            <button type="button" class="author-action" data-author-action="zoom-in-graph" title="확대">🔍+</button>
+            <button type="button" class="author-action" data-author-action="zoom-out-graph" title="축소">🔍-</button>
+            <button type="button" class="author-action" data-author-action="zoom-reset-graph" title="원래 크기">1:1</button>
+            <span class="author-graph-zoom-label">${Math.round(this.graphZoom * 100)}%</span>
+          </div>
+          <div class="author-node-graph-legend">
+            <span class="legend-item"><span class="legend-dot normal"></span>일반 선택지 연결</span>
+            <span class="legend-item"><span class="legend-dot success"></span>[정답] 분기 (successSceneId)</span>
+            <span class="legend-item"><span class="legend-dot fail"></span>[오답] 분기 (failSceneId)</span>
+          </div>
+        </div>
+
+        <div class="author-node-graph-viewport" id="author-node-graph-viewport">
+          <div class="author-graph-canvas-container" id="author-graph-canvas-container"
+               style="transform: translate(${this.graphPan.x}px, ${this.graphPan.y}px) scale(${this.graphZoom});">
+            <svg class="author-node-graph-svg" id="author-node-graph-svg">
+              <defs>
+                <marker id="arrow-normal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8" />
+                </marker>
+                <marker id="arrow-success" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
+                </marker>
+                <marker id="arrow-fail" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" />
+                </marker>
+                <marker id="arrow-wire" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#6366f1" />
+                </marker>
+              </defs>
+              <g class="author-graph-links-layer" id="author-graph-links-layer">
+                ${svgLinksLayer}
+              </g>
+              <path id="graph-connecting-wire-path" class="author-graph-connecting-wire" d="" style="display: none;" marker-end="url(#arrow-wire)" />
+            </svg>
+            <div class="author-graph-cards-layer">
+              ${cardsHtml}
+            </div>
+          </div>
+        </div>
+
+        ${quickPanelHtml}
+      </div>`;
+  }
+
+  renderGraphQuickEditPanel(node, episodeNodes) {
+    if (!node) return '<p>선택된 장면이 없습니다.</p>';
+
+    const choicesHtml = (node.choices || []).map((ch, idx) => `
+      <div class="author-quick-choice-item" style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong style="font-size: 12px; color: #1e293b;">선택지 ${idx + 1}</strong>
+          <button type="button" class="author-action is-danger" data-author-action="delete-quick-choice:${escapeHtml(node.id)}:${idx}" style="padding: 2px 6px; font-size: 11px;">삭제</button>
+        </div>
+        <div style="margin-bottom: 6px;">
+          <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 2px;">선택지 문장</label>
+          <input type="text" data-author-field="choiceText" data-choice-index="${idx}" data-quick-edit-node-id="${escapeHtml(node.id)}" value="${escapeHtml(ch.text || '')}" style="width: 100%; font-size: 12px; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 4px;" />
+        </div>
+        <div style="margin-bottom: 6px;">
+          <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 2px;">기본 이동 대상</label>
+          <select data-author-field="choiceTarget" data-choice-index="${idx}" data-quick-edit-node-id="${escapeHtml(node.id)}" class="author-select" style="width: 100%; font-size: 11.5px; padding: 4px 6px;">
+            <option value="">선택 안 함</option>
+            ${episodeNodes.map(n => `<option value="node:${escapeHtml(n.id)}" ${(ch.nextNode || '').replace(/^node:/, '') === n.id ? 'selected' : ''}>[본문] ${escapeHtml(n.title || n.id)}</option>`).join('')}
+          </select>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+          <div>
+            <label style="display: block; font-size: 10.5px; font-weight: 700; color: #166534; margin-bottom: 2px;">✨ 정답 시 이동</label>
+            <select data-author-field="choiceSuccessSceneId" data-choice-index="${idx}" data-quick-edit-node-id="${escapeHtml(node.id)}" class="author-select" style="width: 100%; font-size: 11px; padding: 4px 6px;">
+              <option value="">-- 미지정 --</option>
+              ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}" ${ch.successSceneId === n.id ? 'selected' : ''}>${escapeHtml(n.title || n.id)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="display: block; font-size: 10.5px; font-weight: 700; color: #991b1b; margin-bottom: 2px;">❌ 오답 시 이동</label>
+            <select data-author-field="choiceFailSceneId" data-choice-index="${idx}" data-quick-edit-node-id="${escapeHtml(node.id)}" class="author-select" style="width: 100%; font-size: 11px; padding: 4px 6px;">
+              <option value="">-- 미지정 --</option>
+              ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}" ${ch.failSceneId === n.id ? 'selected' : ''}>${escapeHtml(n.title || n.id)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    return `
+      <div class="author-quick-panel-header">
+        <div>
+          <span style="font-size: 11px; color: #6366f1; font-weight: 700;">빠른 편집</span>
+          <h4 style="margin: 2px 0 0; font-size: 15px; color: #1e293b;">${escapeHtml(node.title || node.id)}</h4>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <button type="button" class="author-action is-primary" data-author-action="open-full-editor:${escapeHtml(node.id)}" style="padding: 4px 8px; font-size: 11.5px;">전체 편집</button>
+          <button type="button" class="author-action" data-author-action="close-quick-edit" style="padding: 4px 8px; font-size: 11.5px;">✕</button>
+        </div>
+      </div>
+
+      <div class="author-quick-panel-body" style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
+        <div>
+          <label style="display: block; font-size: 11.5px; font-weight: 700; color: #334155; margin-bottom: 4px;">장면 제목</label>
+          <input type="text" data-author-field="storyNodeTitle" data-quick-edit-node-id="${escapeHtml(node.id)}" value="${escapeHtml(node.title || '')}" style="width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <div>
+            <label style="display: block; font-size: 11.5px; font-weight: 700; color: #334155; margin-bottom: 4px;">장·절</label>
+            <input type="text" data-author-field="storyChapter" data-quick-edit-node-id="${escapeHtml(node.id)}" value="${escapeHtml(node.chapter || '')}" style="width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
+          </div>
+          <div>
+            <label style="display: block; font-size: 11.5px; font-weight: 700; color: #334155; margin-bottom: 4px;">장소명</label>
+            <input type="text" data-author-field="storyLocationName" data-quick-edit-node-id="${escapeHtml(node.id)}" value="${escapeHtml(node.locationName || '')}" style="width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
+          </div>
+        </div>
+
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 8px 10px;">
+          <label style="display: block; font-size: 11px; font-weight: 700; color: #166534; margin-bottom: 3px;">✨ 정답 시 이동 장면 (successSceneId)</label>
+          <select data-author-field="storySuccessSceneId" data-quick-edit-node-id="${escapeHtml(node.id)}" class="author-select" style="width: 100%; font-size: 11.5px; padding: 4px 6px;">
+            <option value="">-- 정답 분기 없음 --</option>
+            ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}" ${node.successSceneId === n.id ? 'selected' : ''}>[본문] ${escapeHtml(n.title || n.id)}</option>`).join('')}
+          </select>
+        </div>
+
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 8px 10px;">
+          <label style="display: block; font-size: 11px; font-weight: 700; color: #991b1b; margin-bottom: 3px;">❌ 오답 시 이동 장면 (failSceneId)</label>
+          <select data-author-field="storyFailSceneId" data-quick-edit-node-id="${escapeHtml(node.id)}" class="author-select" style="width: 100%; font-size: 11.5px; padding: 4px 6px;">
+            <option value="">-- 오답 분기 없음 --</option>
+            ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}" ${node.failSceneId === n.id ? 'selected' : ''}>[본문] ${escapeHtml(n.title || n.id)}</option>`).join('')}
+          </select>
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 11.5px; font-weight: 700; color: #334155; margin-bottom: 4px;">본문 문단</label>
+          <textarea data-author-field="storyParagraphs" data-quick-edit-node-id="${escapeHtml(node.id)}" rows="7" style="width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px; resize: vertical; line-height: 1.5;">${escapeHtml((node.paragraphs || []).join('\n'))}</textarea>
+        </div>
+
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 12px; font-weight: 700; color: #334155;">선택지 목록</span>
+            <button type="button" class="author-action is-primary" data-author-action="add-choice-to-node:${escapeHtml(node.id)}" style="padding: 3px 8px; font-size: 11px;">+ 선택지 추가</button>
+          </div>
+          <div class="author-quick-choices-list">
+            ${choicesHtml || '<p style="font-size: 11.5px; color: #94a3b8; text-align: center; margin: 10px 0;">등록된 선택지가 없습니다.</p>'}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  autoLayoutNodes(save = true) {
+    const editorEpisodeId = getLiveEpisodeId();
+    const episodeNodes = Object.values(STORY_NODES).filter((entry) => !editorEpisodeId || entry.episodeId === editorEpisodeId);
+    if (!episodeNodes.length) return;
+
+    const nodeMap = new Map(episodeNodes.map(n => [n.id, n]));
+    const incomingCount = new Map(episodeNodes.map(n => [n.id, 0]));
+    const outgoingMap = new Map(episodeNodes.map(n => [n.id, new Set()]));
+
+    episodeNodes.forEach(node => {
+      const targets = new Set();
+      (node.choices || []).forEach(ch => {
+        let tid = (ch.nextNode || '').replace(/^node:/, '');
+        if (nodeMap.has(tid)) targets.add(tid);
+        if (ch.successSceneId && nodeMap.has(ch.successSceneId)) targets.add(ch.successSceneId);
+        if (ch.failSceneId && nodeMap.has(ch.failSceneId)) targets.add(ch.failSceneId);
+      });
+      if (node.successSceneId && nodeMap.has(node.successSceneId)) targets.add(node.successSceneId);
+      if (node.failSceneId && nodeMap.has(node.failSceneId)) targets.add(node.failSceneId);
+
+      outgoingMap.set(node.id, targets);
+      targets.forEach(tid => {
+        incomingCount.set(tid, (incomingCount.get(tid) || 0) + 1);
+      });
+    });
+
+    let roots = episodeNodes.filter(n => (incomingCount.get(n.id) || 0) === 0);
+    if (roots.length === 0) roots = [episodeNodes[0]];
+
+    const levels = new Map();
+    const queue = [];
+    roots.forEach(r => {
+      levels.set(r.id, 0);
+      queue.push(r.id);
+    });
+
+    while (queue.length > 0) {
+      const curId = queue.shift();
+      const curLevel = levels.get(curId);
+      const out = outgoingMap.get(curId) || new Set();
+      out.forEach(tid => {
+        if (!levels.has(tid)) {
+          levels.set(tid, curLevel + 1);
+          queue.push(tid);
+        }
+      });
+    }
+
+    let maxLevel = 0;
+    levels.forEach(lvl => { if (lvl > maxLevel) maxLevel = lvl; });
+    episodeNodes.forEach(n => {
+      if (!levels.has(n.id)) {
+        levels.set(n.id, maxLevel + 1);
+      }
+    });
+
+    const columns = new Map();
+    levels.forEach((col, nid) => {
+      if (!columns.has(col)) columns.set(col, []);
+      columns.get(col).push(nid);
+    });
+
+    const sortedCols = Array.from(columns.keys()).sort((a, b) => a - b);
+    sortedCols.forEach((colIdx, colVisualIdx) => {
+      const colNodes = columns.get(colIdx);
+      colNodes.forEach((nid, rowIdx) => {
+        const n = nodeMap.get(nid);
+        if (n) {
+          n.editorX = 50 + colVisualIdx * 340;
+          n.editorY = 50 + rowIdx * 190;
+        }
+      });
+    });
+
+    if (save) {
+      this.persist();
+      this.render();
+      this.setStatus('장면 카드 위치를 자동 정렬했습니다.');
+    }
+  }
+
+  initGraphListeners() {
+    if (this._graphListenersInited) return;
+    this._graphListenersInited = true;
+
+    window.addEventListener('pointerdown', (event) => {
+      if (!this.panel?.classList.contains('is-visible') || this.storyViewMode !== 'graph') return;
+      
+      const portOut = event.target.closest('.author-graph-port.port-out');
+      if (portOut) {
+        event.stopPropagation();
+        event.preventDefault();
+        const viewport = document.getElementById('author-node-graph-viewport');
+        const vRect = viewport ? viewport.getBoundingClientRect() : { left: 0, top: 0 };
+        const pRect = portOut.getBoundingClientRect();
+        const sX = (pRect.left + pRect.width / 2 - vRect.left - this.graphPan.x) / this.graphZoom;
+        const sY = (pRect.top + pRect.height / 2 - vRect.top - this.graphPan.y) / this.graphZoom;
+
+        this.graphConnectingWire = {
+          fromNodeId: portOut.dataset.nodeId,
+          portType: portOut.dataset.portType,
+          startX: sX,
+          startY: sY
+        };
+        try { portOut.setPointerCapture(event.pointerId); } catch (e) {}
+        return;
+      }
+
+      const dragHandle = event.target.closest('[data-node-drag-handle]');
+      if (dragHandle) {
+        const nodeId = dragHandle.dataset.nodeDragHandle;
+        const node = STORY_NODES[nodeId];
+        if (node) {
+          event.stopPropagation();
+          event.preventDefault();
+          this.graphDraggingNode = {
+            nodeId,
+            startX: event.clientX,
+            startY: event.clientY,
+            initX: node.editorX || 50,
+            initY: node.editorY || 50
+          };
+          try { dragHandle.setPointerCapture(event.pointerId); } catch (e) {}
+          return;
+        }
+      }
+
+      const viewport = event.target.closest('#author-node-graph-viewport');
+      if (viewport && !event.target.closest('.author-graph-card') && !event.target.closest('.author-graph-quick-panel') && !event.target.closest('.author-node-graph-toolbar')) {
+        this.graphPanning = {
+          startX: event.clientX,
+          startY: event.clientY,
+          initPanX: this.graphPan.x,
+          initPanY: this.graphPan.y
+        };
+      }
+    });
+
+    window.addEventListener('pointermove', (event) => {
+      if (!this.panel?.classList.contains('is-visible') || this.storyViewMode !== 'graph') return;
+
+      if (this.graphConnectingWire) {
+        const viewport = document.getElementById('author-node-graph-viewport');
+        const vRect = viewport ? viewport.getBoundingClientRect() : { left: 0, top: 0 };
+        const curX = (event.clientX - vRect.left - this.graphPan.x) / this.graphZoom;
+        const curY = (event.clientY - vRect.top - this.graphPan.y) / this.graphZoom;
+        this.renderGraphConnectingWire(curX, curY);
+        return;
+      }
+
+      if (this.graphDraggingNode) {
+        const { nodeId, startX, startY, initX, initY } = this.graphDraggingNode;
+        const node = STORY_NODES[nodeId];
+        if (node) {
+          const dx = (event.clientX - startX) / this.graphZoom;
+          const dy = (event.clientY - startY) / this.graphZoom;
+          node.editorX = Math.round(initX + dx);
+          node.editorY = Math.round(initY + dy);
+          const cardElem = document.querySelector(`.author-graph-card[data-graph-node-id="${nodeId}"]`);
+          if (cardElem) {
+            cardElem.style.transform = `translate(${node.editorX}px, ${node.editorY}px)`;
+          }
+          this.updateGraphSvgLines();
+        }
+        return;
+      }
+
+      if (this.graphPanning) {
+        const dx = event.clientX - this.graphPanning.startX;
+        const dy = event.clientY - this.graphPanning.startY;
+        this.graphPan.x = Math.round(this.graphPanning.initPanX + dx);
+        this.graphPan.y = Math.round(this.graphPanning.initPanY + dy);
+        this.updateGraphTransform();
+      }
+    });
+
+    window.addEventListener('pointerup', (event) => {
+      if (this.graphConnectingWire) {
+        const { fromNodeId, portType } = this.graphConnectingWire;
+        this.graphConnectingWire = null;
+        this.clearGraphConnectingWire();
+
+        const elemUnder = document.elementFromPoint(event.clientX, event.clientY);
+        const targetCard = elemUnder?.closest('.author-graph-card');
+        const targetNodeId = targetCard?.dataset?.graphNodeId;
+
+        if (targetNodeId && targetNodeId !== fromNodeId) {
+          const fromNode = STORY_NODES[fromNodeId];
+          const targetNode = STORY_NODES[targetNodeId];
+          if (fromNode && targetNode) {
+            if (portType === 'success') {
+              fromNode.successSceneId = targetNodeId;
+              this.setStatus(`[${fromNode.title || fromNode.id}]의 정답 시 이동 장면을 [${targetNode.title || targetNodeId}]로 설정했습니다.`);
+            } else if (portType === 'fail') {
+              fromNode.failSceneId = targetNodeId;
+              this.setStatus(`[${fromNode.title || fromNode.id}]의 오답 시 이동 장면을 [${targetNode.title || targetNodeId}]로 설정했습니다.`);
+            } else {
+              if (!fromNode.choices) fromNode.choices = [];
+              fromNode.choices.push({
+                text: `${targetNode.title || targetNodeId}(으)로 이동`,
+                nextNode: targetNodeId,
+                hideIfChosen: false
+              });
+              this.setStatus(`[${fromNode.title || fromNode.id}]에서 [${targetNode.title || targetNodeId}]로의 선택지를 연결했습니다.`);
+            }
+            this.persist();
+            this.render();
+          }
+        }
+        return;
+      }
+
+      if (this.graphDraggingNode) {
+        this.graphDraggingNode = null;
+        this.persist();
+        return;
+      }
+
+      if (this.graphPanning) {
+        this.graphPanning = null;
+      }
+    });
+
+    window.addEventListener('wheel', (event) => {
+      if (!this.panel?.classList.contains('is-visible') || this.storyViewMode !== 'graph') return;
+      const viewport = event.target.closest('#author-node-graph-viewport');
+      if (!viewport) return;
+      event.preventDefault();
+      const zoomFactor = event.deltaY < 0 ? 1.08 : 0.92;
+      const newZoom = Math.min(2.0, Math.max(0.35, Number((this.graphZoom * zoomFactor).toFixed(2))));
+      this.graphZoom = newZoom;
+      this.updateGraphTransform();
+    }, { passive: false });
+  }
+
+  updateGraphTransform() {
+    const container = document.getElementById('author-graph-canvas-container');
+    if (container) {
+      container.style.transform = `translate(${this.graphPan.x}px, ${this.graphPan.y}px) scale(${this.graphZoom})`;
+    }
+    const label = document.querySelector('.author-graph-zoom-label');
+    if (label) {
+      label.textContent = `${Math.round(this.graphZoom * 100)}%`;
+    }
+  }
+
+  renderGraphConnectingWire(curX, curY) {
+    const wirePath = document.getElementById('graph-connecting-wire-path');
+    if (!wirePath || !this.graphConnectingWire) return;
+    const { startX, startY } = this.graphConnectingWire;
+    const dx = Math.max(40, Math.abs(curX - startX) * 0.4);
+    const d = `M ${startX} ${startY} C ${startX + dx} ${startY}, ${curX - dx} ${curY}, ${curX} ${curY}`;
+    wirePath.setAttribute('d', d);
+    wirePath.style.display = 'block';
+  }
+
+  clearGraphConnectingWire() {
+    const wirePath = document.getElementById('graph-connecting-wire-path');
+    if (wirePath) {
+      wirePath.setAttribute('d', '');
+      wirePath.style.display = 'none';
+    }
+  }
+
+  updateGraphSvgLines() {
+    const layer = document.getElementById('author-graph-links-layer');
+    if (!layer) return;
+    const editorEpisodeId = getLiveEpisodeId();
+    const episodeNodes = Object.values(STORY_NODES).filter((entry) => !editorEpisodeId || entry.episodeId === editorEpisodeId);
+    const nodeMap = new Map(episodeNodes.map(n => [n.id, n]));
+
+    const links = [];
+    episodeNodes.forEach(srcNode => {
+      if (srcNode.successSceneId && nodeMap.has(srcNode.successSceneId)) {
+        links.push({
+          fromId: srcNode.id,
+          toId: srcNode.successSceneId,
+          type: 'success',
+          label: '정답 이동',
+          choiceIndex: -1,
+          portYOffset: 70
+        });
+      }
+      if (srcNode.failSceneId && nodeMap.has(srcNode.failSceneId)) {
+        links.push({
+          fromId: srcNode.id,
+          toId: srcNode.failSceneId,
+          type: 'fail',
+          label: '오답 이동',
+          choiceIndex: -1,
+          portYOffset: 100
+        });
+      }
+      (srcNode.choices || []).forEach((ch, chIdx) => {
+        let tid = (ch.nextNode || '').replace(/^node:/, '');
+        if (nodeMap.has(tid)) {
+          links.push({
+            fromId: srcNode.id,
+            toId: tid,
+            type: 'normal',
+            label: ch.text || '이동',
+            choiceIndex: chIdx,
+            portYOffset: 35 + chIdx * 16
+          });
+        }
+        if (ch.successSceneId && nodeMap.has(ch.successSceneId)) {
+          links.push({
+            fromId: srcNode.id,
+            toId: ch.successSceneId,
+            type: 'success',
+            label: `[정답] ${ch.text || ''}`,
+            choiceIndex: chIdx,
+            portYOffset: 70
+          });
+        }
+        if (ch.failSceneId && nodeMap.has(ch.failSceneId)) {
+          links.push({
+            fromId: srcNode.id,
+            toId: ch.failSceneId,
+            type: 'fail',
+            label: `[오답] ${ch.text || ''}`,
+            choiceIndex: chIdx,
+            portYOffset: 100
+          });
+        }
+      });
+    });
+
+    layer.innerHTML = links.map(link => {
+      const src = nodeMap.get(link.fromId);
+      const dst = nodeMap.get(link.toId);
+      if (!src || !dst) return '';
+      const x1 = (src.editorX || 0) + 250;
+      const y1 = (src.editorY || 0) + Math.min(130, Math.max(30, link.portYOffset || 50));
+      const x2 = dst.editorX || 0;
+      const y2 = (dst.editorY || 0) + 65;
+
+      const dx = Math.max(45, Math.abs(x2 - x1) * 0.45);
+      const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+      const mx = Math.round((x1 + x2) / 2);
+      const my = Math.round((y1 + y2) / 2);
+
+      let badgeHtml = '';
+      if (link.type === 'success') {
+        badgeHtml = `
+          <g class="author-graph-badge badge-success" data-author-action="click-graph-link:${link.fromId}:${link.toId}:success:${link.choiceIndex}" transform="translate(${mx}, ${my})">
+            <rect x="-26" y="-11" width="52" height="22" rx="6" fill="#10b981" />
+            <text x="0" y="4" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">[정답]</text>
+          </g>`;
+      } else if (link.type === 'fail') {
+        badgeHtml = `
+          <g class="author-graph-badge badge-fail" data-author-action="click-graph-link:${link.fromId}:${link.toId}:fail:${link.choiceIndex}" transform="translate(${mx}, ${my})">
+            <rect x="-26" y="-11" width="52" height="22" rx="6" fill="#ef4444" />
+            <text x="0" y="4" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="700">[오답]</text>
+          </g>`;
+      } else {
+        const shortLabel = escapeHtml(link.label.length > 12 ? link.label.slice(0, 11) + '…' : link.label);
+        badgeHtml = `
+          <g class="author-graph-badge badge-normal" data-author-action="click-graph-link:${link.fromId}:${link.toId}:normal:${link.choiceIndex}" transform="translate(${mx}, ${my})">
+            <rect x="-35" y="-10" width="70" height="20" rx="4" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" />
+            <text x="0" y="4" text-anchor="middle" fill="#475569" font-size="10.5" font-weight="600">${shortLabel}</text>
+          </g>`;
+      }
+
+      return `
+        <g class="author-graph-link-group" data-from="${link.fromId}" data-to="${link.toId}">
+          <path d="${d}" class="author-graph-link link-${link.type}" marker-end="url(#arrow-${link.type})" data-author-action="click-graph-link:${link.fromId}:${link.toId}:${link.type}:${link.choiceIndex}" />
+          ${badgeHtml}
+        </g>`;
+    }).join('');
   }
 
   renderInvestigation() {

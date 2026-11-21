@@ -7314,3 +7314,391 @@ body:not(.author-mode) .author-only {
   gap: 4px;
   cursor: pointer;
 }
+
+/* ==========================================================================
+   작가 에디터: 스토리 노드 연결 맵 (노드 뷰) 및 뷰 모드 전환
+   ========================================================================== */
+.author-story-view-modes-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--bg-card);
+  border-bottom: 1.5px solid var(--border-subtle);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.author-node-graph-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 190px);
+  min-height: 560px;
+  background: #f1f5f9;
+  overflow: hidden;
+  border-radius: 0 0 12px 12px;
+}
+
+.author-node-graph-toolbar {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.author-graph-zoom-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  min-width: 42px;
+  text-align: center;
+}
+
+.author-node-graph-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+  color: #475569;
+  font-weight: 600;
+}
+.author-node-graph-legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.author-node-graph-legend .legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.author-node-graph-legend .legend-dot.normal { background: #94a3b8; }
+.author-node-graph-legend .legend-dot.success { background: #10b981; }
+.author-node-graph-legend .legend-dot.fail { background: #ef4444; }
+
+.author-node-graph-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  background-color: #f8fafc;
+  background-image: radial-gradient(circle, #cbd5e1 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+}
+.author-node-graph-viewport:active {
+  cursor: grabbing;
+}
+
+.author-graph-canvas-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8000px;
+  height: 8000px;
+  transform-origin: 0 0;
+  pointer-events: auto;
+}
+
+.author-node-graph-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 10;
+}
+
+.author-graph-link {
+  fill: none;
+  pointer-events: stroke;
+  cursor: pointer;
+  stroke-linecap: round;
+  transition: stroke-width 0.15s, stroke 0.15s;
+}
+.author-graph-link.link-normal {
+  stroke: #94a3b8;
+  stroke-width: 2.5px;
+}
+.author-graph-link.link-normal:hover {
+  stroke: #64748b;
+  stroke-width: 4px;
+}
+.author-graph-link.link-success {
+  stroke: #10b981;
+  stroke-width: 3.5px;
+}
+.author-graph-link.link-success:hover {
+  stroke: #059669;
+  stroke-width: 5px;
+}
+.author-graph-link.link-fail {
+  stroke: #ef4444;
+  stroke-width: 3.5px;
+}
+.author-graph-link.link-fail:hover {
+  stroke: #dc2626;
+  stroke-width: 5px;
+}
+
+.author-graph-connecting-wire {
+  fill: none;
+  stroke: #6366f1;
+  stroke-width: 3px;
+  stroke-dasharray: 6 4;
+  pointer-events: none;
+}
+
+.author-graph-badge {
+  cursor: pointer;
+  pointer-events: all;
+  transition: transform 0.15s;
+}
+.author-graph-badge:hover {
+  transform: scale(1.1);
+}
+
+.author-graph-cards-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.author-graph-card {
+  position: absolute;
+  width: 250px;
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1.5px solid #cbd5e1;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.author-graph-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.author-graph-card.is-selected {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2.5px rgba(99, 102, 241, 0.35), 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.author-graph-card.is-quick-editing {
+  border-color: #d97706;
+  box-shadow: 0 0 0 2.5px rgba(217, 119, 6, 0.35), 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.author-graph-card-header {
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 9px 9px 0 0;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.author-graph-card-header:active {
+  cursor: grabbing;
+}
+.author-graph-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.author-graph-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.author-graph-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.author-graph-btn-edit,
+.author-graph-btn-full {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.author-graph-btn-edit:hover,
+.author-graph-btn-full:hover {
+  background: #e2e8f0;
+}
+
+.author-graph-card-body {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: #334155;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.author-graph-card-meta {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+}
+.author-graph-card-snippet {
+  margin: 0;
+  line-height: 1.4;
+  color: #475569;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.author-graph-card-branches {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+.author-graph-card-branches .branch-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.author-graph-card-branches .branch-tag.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+.author-graph-card-branches .branch-tag.fail {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.author-graph-card-footer {
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-top: 1px solid #f1f5f9;
+  border-radius: 0 0 9px 9px;
+}
+.author-graph-card-choice-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+}
+.author-graph-btn-add-choice {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #4338ca;
+  cursor: pointer;
+}
+.author-graph-btn-add-choice:hover {
+  background: #eef2ff;
+}
+
+/* 포트 (In / Out) */
+.author-graph-port {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  cursor: crosshair;
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  line-height: 1;
+  user-select: none;
+  transition: transform 0.12s;
+  z-index: 20;
+}
+.author-graph-port:hover {
+  transform: scale(1.3);
+}
+.author-graph-port.port-in {
+  left: -8px;
+  top: 65px;
+  background: #64748b;
+  color: #fff;
+}
+.author-graph-ports-out-wrap {
+  position: absolute;
+  right: -8px;
+  top: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.author-graph-ports-out-wrap .port-out {
+  position: static;
+}
+.author-graph-port.port-normal {
+  background: #6366f1;
+  color: #ffffff;
+}
+.author-graph-port.port-success {
+  background: #10b981;
+  color: #ffffff;
+}
+.author-graph-port.port-fail {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+/* 노드 뷰 빠른 편집 사이드 패널 */
+.author-graph-quick-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 390px;
+  height: 100%;
+  background: #ffffff;
+  border-left: 2px solid #cbd5e1;
+  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.14);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 16px;
+}
+.author-quick-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 12px;
+  border-bottom: 1.5px solid #e2e8f0;
+}

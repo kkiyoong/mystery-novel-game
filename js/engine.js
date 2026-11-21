@@ -578,6 +578,10 @@ export class GameEngine {
       const topicId = widget.dataset.quizTopic;
       const successMsg = widget.dataset.quizSuccess || '✨ 정답입니다!';
       const nextNodeId = widget.dataset.quizNext;
+      const currNodeId = state.getCurrentNode?.() || '';
+      const currNode = STORY_NODES[currNodeId] || {};
+      const successSceneId = widget.dataset.successScene || currNode.successSceneId || nextNodeId;
+      const failSceneId = widget.dataset.failScene || currNode.failSceneId || '';
 
       let acceptedAnswers = [];
       try {
@@ -612,14 +616,15 @@ export class GameEngine {
           state.setFlag(`quiz_cleared_${topicId}`, true);
           if (topicId) state.unlockCodex(topicId);
 
-          this.showToast('수수께끼의 정답을 맞췄습니다!', 'success', '🎉');
+          this.showToast('수수께끼의 정답을 맞췄습니다! 정답 분기 장면으로 이동합니다.', 'success', '🎉');
 
           const quizBody = widget.querySelector('.quiz-body');
           const statusPill = widget.querySelector('.quiz-status-pill');
           widget.classList.add('is-solved');
           if (statusPill) statusPill.textContent = '✔️ 정답 확인 완료';
 
-          const nextNode = nextNodeId && STORY_NODES[nextNodeId];
+          const targetSuccess = successSceneId || nextNodeId;
+          const nextNode = targetSuccess && STORY_NODES[targetSuccess];
 
           if (quizBody) {
             quizBody.innerHTML = `
@@ -631,7 +636,7 @@ export class GameEngine {
                   <span class="solved-ans-badge">입력했던 정답: <b>${escapeHtml(rawVal)}</b></span>
                 </div>
                 ${nextNode ? `
-                  <button type="button" class="quiz-advance-btn" data-advance-node="${escapeHtml(nextNodeId)}">
+                  <button type="button" class="quiz-advance-btn" data-advance-node="${escapeHtml(targetSuccess)}">
                     <span>▶ ${escapeHtml(nextNode.title || '다음 장면으로')}</span>
                   </button>
                 ` : ''}
@@ -640,13 +645,28 @@ export class GameEngine {
             const newAdvBtn = quizBody.querySelector('.quiz-advance-btn');
             if (newAdvBtn) {
               newAdvBtn.addEventListener('click', () => {
-                state.setCurrentNode(nextNodeId);
-                this.renderStoryNode(nextNodeId);
+                state.setCurrentNode(targetSuccess);
+                this.renderStoryNode(targetSuccess);
               });
             }
           }
+
+          if (targetSuccess && STORY_NODES[targetSuccess]) {
+            setTimeout(() => {
+              state.setCurrentNode(targetSuccess);
+              this.renderStoryNode(targetSuccess);
+            }, 600);
+          }
         } else {
           this.playAudio('click');
+          if (failSceneId && STORY_NODES[failSceneId]) {
+            this.showToast('오답입니다! 오답 분기 장면으로 이동합니다.', 'warning', '❌');
+            setTimeout(() => {
+              state.setCurrentNode(failSceneId);
+              this.renderStoryNode(failSceneId);
+            }, 650);
+            return;
+          }
           input.classList.remove('is-invalid');
           void input.offsetWidth;
           input.classList.add('is-invalid');
@@ -1216,7 +1236,7 @@ export class GameEngine {
       return this.renderBriefingCardHtml(conclusionNodeId, deductionTopic);
     }
 
-    // Check quiz answer tag: [정답입력: topicQuery | acceptedAnswers | successMsg | nextNodeId]
+    // Check quiz answer tag: [정답입력: topicQuery | acceptedAnswers | successMsg | nextNodeId | successSceneId | failSceneId]
     const quizMatch = trimmed.match(/^\[(?:정답입력|퀴즈입력|퀴즈|정답판정|QUIZ)\s*:\s*(.+?)\]$/i);
     if (quizMatch) {
       const parts = quizMatch[1].split('|').map(s => s.trim());
@@ -1224,6 +1244,9 @@ export class GameEngine {
       const customAnswersStr = parts[1] || '';
       const successMsg = parts[2] || '✨ 정답입니다! 수수께끼를 훌륭하게 해결했습니다.';
       const nextNodeId = parts[3] || '';
+      const parentNode = STORY_NODES[nodeId] || {};
+      const successSceneId = parts[4] || parentNode.successSceneId || nextNodeId || '';
+      const failSceneId = parts[5] || parentNode.failSceneId || '';
 
       const existingTopic = CODEX_DATA.find(c => c.id === rawTopic || c.title === rawTopic || (c.keywords && c.keywords.includes(rawTopic))) ||
                             CODEX_DATA.find(c => c.category === 'clue');
@@ -1253,7 +1276,9 @@ export class GameEngine {
              data-quiz-topic="${escapeHtml(topicId)}" 
              data-quiz-answers="${answersJson}" 
              data-quiz-success="${escapeHtml(successMsg)}" 
-             data-quiz-next="${escapeHtml(nextNodeId)}">
+             data-quiz-next="${escapeHtml(nextNodeId)}"
+             data-success-scene="${escapeHtml(successSceneId)}"
+             data-fail-scene="${escapeHtml(failSceneId)}">
           <div class="quiz-header">
             <div class="quiz-badge-wrap">
               <span class="quiz-badge-icon">${escapeHtml(topicIcon)}</span>
@@ -2367,9 +2392,41 @@ export class GameEngine {
         return;
       }
 
-      if (choice.nextNode) {
-        state.setCurrentNode(choice.nextNode);
-        this.renderStoryNode(choice.nextNode);
+      // 정답/오답별 이동 장면 분기 처리 (successSceneId, failSceneId)
+      let targetNode = choice.nextNode;
+      const successScene = choice.successSceneId || node.successSceneId;
+      const failScene = choice.failSceneId || node.failSceneId;
+
+      if (successScene || failScene) {
+        let isSuccess = false;
+        if (choice.isCorrect !== undefined) {
+          isSuccess = Boolean(choice.isCorrect);
+        } else if (choice.deductionTopic) {
+          isSuccess = Boolean(state.getFlag(`quiz_cleared_${choice.deductionTopic}`) || state.getFlag(`deduction_success_${choice.deductionTopic}`));
+        } else if (choice.requiresFlags && choice.requiresFlags.length > 0) {
+          isSuccess = choice.requiresFlags.every((f) => state.getFlag(f));
+        } else if (node.deductionTopic) {
+          isSuccess = Boolean(state.getFlag(`quiz_cleared_${node.deductionTopic}`) || state.getFlag(`deduction_success_${node.deductionTopic}`));
+        } else if (successScene && !failScene) {
+          isSuccess = true;
+        } else if (failScene && !successScene) {
+          isSuccess = false;
+        } else {
+          isSuccess = true;
+        }
+
+        if (isSuccess && successScene) {
+          targetNode = successScene;
+          this.showToast('정답 분기 장면으로 이동합니다.', 'success', '✨');
+        } else if (!isSuccess && failScene) {
+          targetNode = failScene;
+          this.showToast('오답 분기 장면으로 이동합니다.', 'warning', '❌');
+        }
+      }
+
+      if (targetNode) {
+        state.setCurrentNode(targetNode);
+        this.renderStoryNode(targetNode);
       }
     };
 
