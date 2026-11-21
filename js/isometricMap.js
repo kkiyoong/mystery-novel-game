@@ -40,8 +40,9 @@ export const MAP_TILES = [
     "q": 1,
     "r": -1,
     "building": "annex",
-    "description": "아카데미의 연구와 강의가 이루어지는 건물입니다.",
-    "visualOnly": true
+    "description": "아카데미의 연구와 강의가 이루어지는 연구관입니다.",
+    "locationId": "loc_lab",
+    "alwaysVisible": true
   },
   {
     "key": "garden",
@@ -63,11 +64,12 @@ export const MAP_TILES = [
   },
   {
     "key": "annex",
-    "locationId": "loc_lab",
     "name": "별관",
     "q": 1,
     "r": 0,
-    "building": "annex"
+    "building": "annex",
+    "description": "아카데미 외곽의 별관 건물입니다.",
+    "visualOnly": true
   },
   {
     "key": "clocktower",

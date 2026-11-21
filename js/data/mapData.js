@@ -37,36 +37,32 @@ export const MAP_LOCATIONS = [
   },
   {
     "id": "loc_garden",
-    "name": "비밀 안개 정원",
+    "name": "정원",
     "subtitle": "서쪽 온실 외곽",
     "icon": "🌿",
     "coords": {
       "x": 20,
       "y": 36
     },
-    "unlocked": false,
-    "requiredFlag": "inspected_window",
-    "unlockHint": "서고 창틀에 남은 흔적을 살펴보면 이동할 수 있습니다.",
+    "unlocked": true,
     "hasInvestigation": true,
-    "description": "특유의 붉은 점토와 희귀 약초들이 자라는 인적이 드문 안개 정원입니다.",
+    "description": "특유의 붉은 점토와 희귀 약초들이 자라는 정원입니다.",
     "destinationType": "story",
     "travelMode": "story",
     "targetStoryNode": "story_1795179345197"
   },
   {
     "id": "loc_lab",
-    "name": "연구동",
+    "name": "연구관",
     "subtitle": "약초학 연구실",
     "icon": "🧪",
     "coords": {
       "x": 26,
       "y": 80
     },
-    "unlocked": false,
-    "requiredFlag": "unlocked_desk_drawer",
-    "unlockHint": "서랍 속 비밀 일지를 찾아내면 이동할 수 있습니다.",
+    "unlocked": true,
     "hasInvestigation": true,
-    "description": "수석 연구원 펠릭스의 개인 연구실. 수상한 시약과 금지된 마법진이 그려져 있습니다.",
+    "description": "아카데미의 연구와 강의가 이루어지는 연구관입니다.",
     "destinationType": "story",
     "travelMode": "story",
     "targetStoryNode": "story_1795202607078"

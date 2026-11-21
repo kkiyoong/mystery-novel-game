@@ -2,10 +2,10 @@
  * Narrative Branching Engine & Layton-Style Investigation Controller
  */
 
-import { state } from './state.js?v=20261121_1420';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1420';
-import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_1420';
-import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_1420';
+import { state } from './state.js?v=20261121_1430';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1430';
+import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_1430';
+import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_1430';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;',
@@ -371,7 +371,7 @@ export class GameEngine {
         } else if (choice.text.includes('도서관')) {
           const stat = this._getLocationStatus('loc_library');
           locBadgeHtml = `<span class="choice-loc-status is-${stat.status}">[${escapeHtml(stat.label)}]</span>`;
-        } else if (choice.text.includes('연구동')) {
+        } else if (choice.text.includes('연구관') || choice.text.includes('연구동')) {
           const stat = this._getLocationStatus('loc_lab');
           locBadgeHtml = `<span class="choice-loc-status is-${stat.status}">[${escapeHtml(stat.label)}]</span>`;
         } else if (choice.text.includes('정원')) {
@@ -1036,8 +1036,8 @@ export class GameEngine {
     const hubLocations = [
       { id: 'loc_nebula', name: '네블라 홀', icon: '🔭', storyNode: 'story_1795180010121' },
       { id: 'loc_library', name: '도서관', icon: '📚' },
-      { id: 'loc_lab', name: '연구동', icon: '🧪' },
-      { id: 'loc_garden', name: '비밀 안개 정원', icon: '🌿' }
+      { id: 'loc_lab', name: '연구관', icon: '🧪' },
+      { id: 'loc_garden', name: '정원', icon: '🌿' }
     ];
 
     const isDeductionSolved = Boolean(state.getFlag('deduction_any_solved'));
@@ -3089,11 +3089,15 @@ export class GameEngine {
 
     const skipHint = document.createElement('div');
     skipHint.className = 'messenger-skip-hint';
-    skipHint.textContent = '💬 대화가 진행 중입니다 — 대화창을 클릭하면 전체 대화를 한 번에 표시합니다';
+    skipHint.textContent = '💬 대화가 진행 중입니다 (1초 간격) — 터치하거나 스크롤하면 한 번에 표시합니다';
     container.appendChild(skipHint);
 
     let revealedCount = 0;
+    let isFullyRevealed = false;
+
     const revealAllRemaining = () => {
+      if (isFullyRevealed) return;
+      isFullyRevealed = true;
       if (this.messengerRevealTimers) {
         this.messengerRevealTimers.forEach((t) => clearTimeout(t));
         this.messengerRevealTimers = [];
@@ -3105,6 +3109,9 @@ export class GameEngine {
       if (skipHint.parentNode) skipHint.remove();
       this.initNovelTypewriters(container);
       this.bindInlineStoryWidgets(container);
+      if (scrollBox) {
+        scrollBox.scrollTop = scrollBox.scrollHeight;
+      }
     };
 
     skipHint.addEventListener('click', (e) => {
@@ -3113,26 +3120,46 @@ export class GameEngine {
     });
 
     if (scrollBox) {
-      scrollBox.onclick = (e) => {
-        if (e.target.closest('button, a, .story-game-widget')) return;
-        if (revealedCount < domNodes.length) {
+      const handleUserInterruption = (e) => {
+        if (e && e.target && e.target.closest('button, a, .story-game-widget, input, select')) return;
+        if (!isFullyRevealed && revealedCount < domNodes.length) {
           revealAllRemaining();
         }
       };
+
+      scrollBox.onclick = handleUserInterruption;
+      scrollBox.ontouchstart = handleUserInterruption;
+      scrollBox.onwheel = (e) => {
+        if (!isFullyRevealed && Math.abs(e.deltaY) > 4) {
+          revealAllRemaining();
+        }
+      };
+
+      const handleScrollInterruption = () => {
+        if (!isFullyRevealed && revealedCount < domNodes.length) {
+          revealAllRemaining();
+        }
+      };
+      scrollBox.addEventListener('scroll', handleScrollInterruption, { passive: true, once: true });
     }
 
     domNodes.forEach((nodeEl, i) => {
-      const delay = i === 0 ? 0 : i * 380;
+      // 대화창 당 약 1초 (1000ms)
+      const delay = i === 0 ? 0 : i * 1000;
       const timer = setTimeout(() => {
-        if (revealedCount <= i) {
+        if (!isFullyRevealed && revealedCount <= i) {
           container.appendChild(nodeEl);
           revealedCount = i + 1;
           this.bindInlineStoryWidgets(nodeEl);
           if (scrollBox) {
-            scrollBox.scrollTop = scrollBox.scrollHeight;
+            scrollBox.scrollTo({
+              top: scrollBox.scrollHeight,
+              behavior: 'smooth'
+            });
           }
-          if (revealedCount >= domNodes.length && skipHint.parentNode) {
-            skipHint.remove();
+          if (revealedCount >= domNodes.length) {
+            isFullyRevealed = true;
+            if (skipHint.parentNode) skipHint.remove();
             this.initNovelTypewriters(container);
           }
         }
