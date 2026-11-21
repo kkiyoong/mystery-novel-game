@@ -2,10 +2,10 @@
  * Narrative Branching Engine & Layton-Style Investigation Controller
  */
 
-import { state } from './state.js?v=20261121_1430';
-import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1430';
-import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_1430';
-import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_1430';
+import { state } from './state.js?v=20261121_1440';
+import { STORY_EPISODES, STORY_NODES } from './data/storyData.js?v=20261121_1440';
+import { INVESTIGATION_SCENES, MAP_LOCATIONS } from './data/mapData.js?v=20261121_1440';
+import { CODEX_DATA, INVENTORY_ITEMS } from './data/codexData.js?v=20261121_1440';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;',
@@ -3130,17 +3130,15 @@ export class GameEngine {
       scrollBox.onclick = handleUserInterruption;
       scrollBox.ontouchstart = handleUserInterruption;
       scrollBox.onwheel = (e) => {
-        if (!isFullyRevealed && Math.abs(e.deltaY) > 4) {
+        if (!isFullyRevealed && Math.abs(e.deltaY) > 2) {
           revealAllRemaining();
         }
       };
-
-      const handleScrollInterruption = () => {
+      scrollBox.ontouchmove = () => {
         if (!isFullyRevealed && revealedCount < domNodes.length) {
           revealAllRemaining();
         }
       };
-      scrollBox.addEventListener('scroll', handleScrollInterruption, { passive: true, once: true });
     }
 
     domNodes.forEach((nodeEl, i) => {
