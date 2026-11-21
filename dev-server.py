@@ -10,7 +10,7 @@ import os
 import re
 import sys
 
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Target directories to keep 100% in sync
@@ -150,22 +150,23 @@ class GameHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-def run():
-    addr = ('', PORT)
+def run(port=None):
+    if port is None:
+        port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+    addr = ('', port)
     try:
         server = http.server.ThreadingHTTPServer(addr, GameHandler)
         print(f"==================================================")
         print(f"🚀 Mystery Novel Game Dev Server Running!")
-        print(f"👉 Local URL: http://localhost:{PORT}")
+        print(f"👉 Local URL: http://localhost:{port}")
         print(f"📂 Syncing directories: {TARGET_DIRS}")
         print(f"✨ Feature: Changes in Author Editor will auto-save to disk!")
         print(f"==================================================")
         server.serve_forever()
     except OSError as e:
         if "Address already in use" in str(e):
-            print(f"Port {PORT} is already in use. Trying {PORT + 1}...")
-            sys.argv[1:] = [str(PORT + 1)]
-            run()
+            print(f"Port {port} is already in use. Trying {port + 1}...")
+            run(port + 1)
         else:
             raise
 

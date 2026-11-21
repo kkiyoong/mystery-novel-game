@@ -1010,6 +1010,7 @@ export class AuthorEditor {
             ${actionButton('위로 이동(▲)', 'move-episode-up')}
             ${actionButton('아래로 이동(▼)', 'move-episode-down')}
             ${actionButton('+ 새 회차 추가', 'add-episode', 'is-primary')}
+            ${ids.length > 1 ? actionButton('회차 삭제(🗑️)', 'delete-episode', 'is-danger') : ''}
           </div>
         </div>
         <div class="author-episode-desc-row">
@@ -1036,6 +1037,44 @@ export class AuthorEditor {
     this.persist();
     this.render();
     this.setStatus(`회차 순서가 변경되었습니다: [${STORY_EPISODES[id]?.title || id}] → ${to + 1}번째`);
+    this.saveToDisk();
+  }
+
+  deleteEpisode() {
+    const ids = Object.keys(STORY_EPISODES);
+    if (ids.length <= 1) {
+      this.setStatus('마지막 남은 회차는 삭제할 수 없습니다.', true);
+      return;
+    }
+    const currentId = getLiveEpisodeId() || ids[0];
+    const episodeTitle = STORY_EPISODES[currentId]?.title || currentId;
+
+    if (!confirm(`정말로 [${episodeTitle}] 회차를 삭제하시겠습니까?\n이 회차에 속한 모든 장면과 설정 데이터가 함께 삭제됩니다.`)) {
+      return;
+    }
+
+    // 1. 해당 회차 메타 삭제
+    delete STORY_EPISODES[currentId];
+
+    // 2. 해당 회차에 속한 스토리 노드 삭제
+    Object.keys(STORY_NODES).forEach((nodeId) => {
+      if (STORY_NODES[nodeId].episodeId === currentId) {
+        delete STORY_NODES[nodeId];
+      }
+    });
+
+    // 3. 회차별 보관 슬롯 삭제
+    delete EPISODE_DATA[currentId];
+
+    // 4. 남아있는 첫 번째 회차로 전환
+    const remaining = Object.keys(STORY_EPISODES);
+    const nextEpId = remaining[0];
+    this.switchEpisode(nextEpId);
+
+    // 5. 저장 및 UI 갱신
+    this.persist();
+    this.render();
+    this.setStatus(`[${episodeTitle}] 회차가 삭제되었습니다. [${STORY_EPISODES[nextEpId]?.title || nextEpId}] 회차로 전환되었습니다.`);
     this.saveToDisk();
   }
 
@@ -1171,6 +1210,7 @@ export class AuthorEditor {
     else if (action === 'export') this.exportData();
     else if (action === 'import') this.fileInput?.click();
     else if (action === 'add-episode') this.addEpisode();
+    else if (action === 'delete-episode') this.deleteEpisode();
     else if (action === 'move-episode-up') this.moveEpisode(-1);
     else if (action === 'move-episode-down') this.moveEpisode(1);
     else if (action === 'import-from-episode') this.importEpisodeParts();
