@@ -276,6 +276,13 @@ export class GameEngine {
     const contentContainer = document.getElementById('story-content');
     if (!contentContainer) return;
 
+    if (node.setFlags) {
+      const flags = Array.isArray(node.setFlags)
+        ? node.setFlags
+        : String(node.setFlags).split(',').map((s) => s.trim()).filter(Boolean);
+      flags.forEach((f) => state.setFlag(f, true));
+    }
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     let html = `
@@ -305,6 +312,25 @@ export class GameEngine {
       (node.chapter && node.chapter.includes('탐사 허브'))
     );
 
+    if (!isHub && (node.locationName || node.locationId)) {
+      state.recordVisitedLocation(node.locationName || node.locationId);
+    }
+
+    const summaryText = state.getHubReturnSummary ? state.getHubReturnSummary() : null;
+    if (isHub && summaryText) {
+      html += `
+        <div class="hub-summary-banner">
+          <div class="hub-summary-content">
+            <span class="hub-summary-icon">🧭</span>
+            <div class="hub-summary-text-group">
+              <span class="hub-summary-badge">탐사 상황 브리핑</span>
+              <p class="hub-summary-sentence">“${escapeHtml(summaryText)}”</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     if (isHub && !hasInlineBriefing) {
       html += this.renderBriefingCardHtml('story_1795161633215', 'clue_herb_quiz');
     }
@@ -318,12 +344,30 @@ export class GameEngine {
         state.getFlag(`chosen_global_${choice.text.trim()}`) ||
         (choice.nextNode && state.getFlag(`visited_target_${choice.nextNode}`))
       );
-      const shouldHide = isChosen && (choice.hideIfChosen === true);
-      return { choice, index, isChosen, shouldHide };
+
+      // Check requiresFlags
+      const reqFlags = choice.requiresFlags || choice.condition?.requiresFlags;
+      let flagsMet = true;
+      if (reqFlags) {
+        const flagList = Array.isArray(reqFlags)
+          ? reqFlags
+          : String(reqFlags).split(',').map((s) => s.trim()).filter(Boolean);
+        if (flagList.length > 0) {
+          flagsMet = flagList.every((f) => Boolean(state.getFlag(f)));
+        }
+      }
+
+      // If lockBehavior is 'hide' and flags are not met, hide completely!
+      const isHiddenByLock = (choice.lockBehavior === 'hide' || choice.lockBehavior === 'hidden') && !flagsMet;
+      const isHiddenByChosen = isChosen && (choice.hideIfChosen === true);
+      const shouldHide = isHiddenByChosen || isHiddenByLock;
+
+      return { choice, index, isChosen, flagsMet, isHiddenByLock, shouldHide };
     });
 
-    const visibleChoices = evaluatedChoices.filter((item) => !item.shouldHide);
-    const finalChoices = visibleChoices.length > 0 ? visibleChoices : evaluatedChoices;
+    const unhiddenChoices = evaluatedChoices.filter((item) => !item.isHiddenByLock);
+    const visibleChoices = unhiddenChoices.filter((item) => !item.shouldHide);
+    const finalChoices = visibleChoices.length > 0 ? visibleChoices : unhiddenChoices;
 
     if (finalChoices.length > 0) {
       html += `<section class="story-choices-container"><h3 class="choices-heading">선택지</h3><div class="choices-list">`;
@@ -337,7 +381,7 @@ export class GameEngine {
       }
 
       finalChoices.forEach(({ choice, index }) => {
-        const evaluation = this.evaluateCondition(choice.condition);
+        const evaluation = this.evaluateCondition(choice.condition, choice);
         const disabledAttr = evaluation.met ? '' : 'disabled aria-disabled="true"';
         let disabledClass = evaluation.met ? '' : 'is-disabled';
         const badgeHtml = choice.requirementText
@@ -412,6 +456,24 @@ export class GameEngine {
       });
 
       html += `</div></section>`;
+    } else if (node.returnToHub) {
+      html += `
+        <section class="story-choices-container hub-return-container">
+          <h3 class="choices-heading">탐색 완료</h3>
+          <div class="choices-list">
+            <button type="button" class="story-choice-btn hub-return-btn is-conclusion-ready" data-hub-action="return-to-hub">
+              <div class="choice-main">
+                <span class="choice-marker">🧭</span>
+                <span class="choice-text">탐색을 마치고 탐사 허브로 복귀한다</span>
+              </div>
+              <div class="choice-desc-subline">
+                <span class="choice-desc-icon">💬</span>
+                <span class="choice-desc-text">확보한 정보와 단서를 정리하고 다음 조사 구역을 결정합니다.</span>
+              </div>
+            </button>
+          </div>
+        </section>
+      `;
     }
 
     contentContainer.innerHTML = html;
@@ -420,7 +482,9 @@ export class GameEngine {
     hubActionBtns.forEach((btn) => {
       btn.addEventListener('click', () => {
         const action = btn.dataset.hubAction;
-        if (action === 'open-deduction') {
+        if (action === 'return-to-hub') {
+          this.returnToExplorationHub(node.locationName || node.locationId);
+        } else if (action === 'open-deduction') {
           const topic = btn.dataset.deductionTopic || 'clue_herb_quiz';
           if (this.onOpenDeduction) {
             this.onOpenDeduction(topic);
@@ -443,6 +507,8 @@ export class GameEngine {
         } else if (action === 'goto-location') {
           const locId = btn.dataset.hubLocId;
           const storyNode = btn.dataset.hubStoryNode;
+          const locName = btn.querySelector('.hub-loc-name')?.textContent || locId;
+          state.recordExplorationBaseline(locName || locId);
           const mapLoc = (MAP_LOCATIONS || []).find((l) => l.id === locId);
           if (mapLoc && mapLoc.destinationType === 'story' && mapLoc.targetStoryNode && STORY_NODES[mapLoc.targetStoryNode]) {
             state.setMode('story');
@@ -2049,7 +2115,81 @@ export class GameEngine {
     }
   }
 
-  evaluateCondition(condition) {
+  getKoreanPostposition(word, withConsonant = '을', withoutConsonant = '를') {
+    if (!word) return withoutConsonant;
+    const clean = String(word).trim();
+    if (!clean) return withoutConsonant;
+    const lastChar = clean.slice(-1);
+    const code = lastChar.charCodeAt(0);
+    if (code >= 0xac00 && code <= 0xd7a3) {
+      const hasFinalConsonant = (code - 0xac00) % 28 > 0;
+      return hasFinalConsonant ? withConsonant : withoutConsonant;
+    }
+    return `${withConsonant}(${withoutConsonant})`;
+  }
+
+  buildHubReturnSummary(diff) {
+    const newClues = diff?.newClues || 0;
+    const newChars = diff?.newChars || 0;
+    const visited = diff?.visitedLocations || (state.getVisitedLocations ? state.getVisitedLocations() : []) || [];
+
+    let discoveryPart = '';
+    if (newClues > 0 && newChars > 0) {
+      discoveryPart = `새 단서 ${newClues}개, 인물 ${newChars}명을 발견했다.`;
+    } else if (newClues > 0) {
+      discoveryPart = `새 단서 ${newClues}개를 발견했다.`;
+    } else if (newChars > 0) {
+      discoveryPart = `새 인물 ${newChars}명을 발견했다.`;
+    } else {
+      discoveryPart = `새 단서 0개, 인물 0명을 발견했다.`;
+    }
+
+    let locPart = '';
+    if (visited.length > 0) {
+      const joinedLocs = visited.join(', ');
+      const particle = this.getKoreanPostposition(joinedLocs, '을', '를');
+      locPart = ` ${joinedLocs}${particle} 탐색했다.`;
+    } else {
+      locPart = ` 조사를 마쳤다.`;
+    }
+
+    return `${discoveryPart}${locPart} 이제 어떡할까?`;
+  }
+
+  returnToExplorationHub(locationNameOrId = '') {
+    const diff = state.calculateExplorationDiff ? state.calculateExplorationDiff(locationNameOrId) : null;
+    const summary = this.buildHubReturnSummary(diff);
+    if (state.setHubReturnSummary) {
+      state.setHubReturnSummary(summary, diff);
+    }
+
+    const currentEp = (state.getCurrentEpisodeId && state.getCurrentEpisodeId()) || 'ep1';
+    const hubNodeId =
+      STORY_EPISODES[currentEp]?.hubNode ||
+      Object.values(STORY_NODES).find((n) => n.isHubNode || (n.chapter && n.chapter.includes('탐사 허브')))?.id ||
+      (STORY_NODES['story_1795192473432'] ? 'story_1795192473432' : 'ep1_pocket_intro');
+
+    state.setMode('story');
+    state.setCurrentNode(hubNodeId);
+    this.renderStoryNode(hubNodeId);
+  }
+
+  evaluateCondition(condition, choice = null) {
+    const reqFlags = choice?.requiresFlags || condition?.requiresFlags;
+    if (reqFlags) {
+      const flagList = Array.isArray(reqFlags)
+        ? reqFlags
+        : String(reqFlags).split(',').map((s) => s.trim()).filter(Boolean);
+      for (const flag of flagList) {
+        if (!state.getFlag(flag)) {
+          return {
+            met: false,
+            reason: `[조건 미달] 관련 단서나 조건(${flag})을 충족하지 못했습니다.`
+          };
+        }
+      }
+    }
+
     if (!condition) return { met: true };
 
     const player = state.getPlayer();
@@ -2095,6 +2235,27 @@ export class GameEngine {
     this.flushPendingStoryUnlocks(this.storyView);
     const choice = node.choices[choiceIndex];
     if (!choice) return;
+
+    if (choice.setFlags) {
+      const flags = Array.isArray(choice.setFlags)
+        ? choice.setFlags
+        : String(choice.setFlags).split(',').map((s) => s.trim()).filter(Boolean);
+      flags.forEach((f) => state.setFlag(f, true));
+    }
+
+    const isHub = Boolean(
+      node.isHubNode ||
+      (node.chapter && node.chapter.includes('탐사 허브'))
+    );
+    if (isHub) {
+      const locName = choice.locationName || node.locationName || choice.text || '';
+      if (state.recordExplorationBaseline) {
+        state.recordExplorationBaseline(locName);
+      }
+      if (state.clearHubReturnSummary) {
+        state.clearHubReturnSummary();
+      }
+    }
 
     // Record choice selection
     const choiceKey = choice.id || `choice_${node.id}_${choiceIndex}`;
@@ -2160,6 +2321,11 @@ export class GameEngine {
     }
 
     const proceed = () => {
+      if (choice.returnToHub || choice.nextNode === 'returnToHub') {
+        this.returnToExplorationHub(choice.locationName || node.locationName || node.locationId);
+        return;
+      }
+
       if (choice.isResetTrigger) {
         state.reset();
         this.showToast('게임 데이터가 초기화되었습니다. 처음부터 다시 시작합니다.', 'info', '🔄');
@@ -2290,6 +2456,13 @@ export class GameEngine {
     }
     const leaveButton = document.getElementById('leave-investigation-btn');
     if (leaveButton) leaveButton.disabled = true;
+
+    const locName = scene?.title || scene?.id || '';
+    const diff = state.calculateExplorationDiff ? state.calculateExplorationDiff(locName) : null;
+    const summary = this.buildHubReturnSummary(diff);
+    if (state.setHubReturnSummary) {
+      state.setHubReturnSummary(summary, diff);
+    }
 
     this.leaveTimeoutId = setTimeout(() => {
       const currentEp = (state.getCurrentEpisodeId && state.getCurrentEpisodeId()) || 'ep1';

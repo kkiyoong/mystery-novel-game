@@ -22,6 +22,7 @@ window.CODEX_DATA = CODEX_DATA;
 window.INVESTIGATION_SCENES = INVESTIGATION_SCENES;
 window.MAP_LOCATIONS = MAP_LOCATIONS;
 window.STORY_NODES = STORY_NODES;
+window.STORY_EPISODES = STORY_EPISODES;
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
   '&': '&amp;',
   '<': '&lt;',
@@ -2177,6 +2178,9 @@ function bootApp() {
   if (window.gameApp) return;
   try {
     window.gameApp = new App();
+    window.app = window.gameApp;
+    window.engine = window.gameApp.engine;
+    window.authorEditor = window.gameApp.authorEditor;
   } catch (err) {
     console.error('[App] 애플리케이션 초기화 실패:', err);
     // 긴급 복구: localStorage 오류일 수 있으므로 안전 조치

@@ -2508,8 +2508,13 @@ export class AuthorEditor {
       if (target) target.completesEpisode = Boolean(value);
       return false;
     }
+    if (name === 'storyReturnToHub') {
+      const target = STORY_NODES[this.selectedStoryNodeId];
+      if (target) target.returnToHub = Boolean(value);
+      return false;
+    }
     if (name === 'episodeTitle' || name === 'storyNodeTitle' || name === 'storyChapter' ||
-        name === 'storyLocationName' || name === 'storySummary' || name === 'storyParagraphs') {
+        name === 'storyLocationName' || name === 'storySummary' || name === 'storyParagraphs' || name === 'storyIsHubNode') {
       const node = STORY_NODES[this.selectedStoryNodeId];
       if (!node) return false;
       if (name === 'episodeTitle') {
@@ -2541,6 +2546,48 @@ export class AuthorEditor {
       const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
       if (choice) {
         choice.hideIfChosen = Boolean(value);
+      }
+      return false;
+    }
+    if (name === 'choiceReturnToHub') {
+      const node = STORY_NODES[this.selectedStoryNodeId];
+      const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
+      if (choice) {
+        choice.returnToHub = Boolean(value);
+      }
+      return false;
+    }
+    if (name === 'choiceRequiresFlags') {
+      const node = STORY_NODES[this.selectedStoryNodeId];
+      const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
+      if (choice) {
+        const raw = String(value || '').trim();
+        if (raw) {
+          choice.requiresFlags = raw.split(',').map((s) => s.trim()).filter(Boolean);
+        } else {
+          delete choice.requiresFlags;
+        }
+      }
+      return false;
+    }
+    if (name === 'choiceLockBehavior') {
+      const node = STORY_NODES[this.selectedStoryNodeId];
+      const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
+      if (choice) {
+        choice.lockBehavior = value;
+      }
+      return false;
+    }
+    if (name === 'choiceSetFlags') {
+      const node = STORY_NODES[this.selectedStoryNodeId];
+      const choice = node?.choices?.[Number(control.dataset.choiceIndex)];
+      if (choice) {
+        const raw = String(value || '').trim();
+        if (raw) {
+          choice.setFlags = raw.split(',').map((s) => s.trim()).filter(Boolean);
+        } else {
+          delete choice.setFlags;
+        }
       }
       return false;
     }
@@ -3202,14 +3249,37 @@ export class AuthorEditor {
           ${field('선택지 부가 설명 (호버 툴팁 / 힌트)', 'choiceDesc', choice.desc || '', 'text', { attributes: `data-choice-index="${index}" placeholder="마우스 호버 시 뜰 힌트나 설명 (비워두면 툴팁 없음)"` })}
           ${selectField('이동할 곳', 'choiceTarget', target, selectedNode, `data-choice-index="${index}"`)}
           <span style="display:block; font-size:11px; color:#64748b; margin-top:-6px; margin-bottom:10px;">💡 바로 조사로 가지 않고 장소 도착 본문(상황/독백)을 먼저 거치게 하려면, 이동할 곳을 [본문] 장면으로 지정한 후 해당 장면에서 [조사] 선택지를 만들어 연결하세요.</span>
-          <label style="display: flex; align-items: center; gap: 7px; margin: 8px 0 6px; font-size: 12px; color: #111827; font-weight: 700; cursor: pointer; background: #ffffff; padding: 6px 10px; border-radius: 6px; border: 1.5px solid #cbd5e1;">
-            <input type="checkbox" data-author-field="choiceHideIfChosen" data-choice-index="${index}" ${choice.hideIfChosen !== false ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;" />
-            <span>선택 후 다시 올 때 숨기기 (유저가 이미 선택한 경우 안 보임)</span>
-          </label>
-          <label style="display: flex; align-items: center; gap: 7px; margin: 4px 0 12px; font-size: 12px; color: #b45309; font-weight: 700; cursor: pointer; background: #fffbeb; padding: 6px 10px; border-radius: 6px; border: 1.5px solid #fde68a;">
-            <input type="checkbox" data-author-field="choiceIsConclusion" data-choice-index="${index}" ${choice.isConclusionChoice ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;" />
-            <span>💡 최종 추리/정답 제출 선택지로 지정 (추론 성공 시 황금빛 아우라로 강조)</span>
-          </label>
+          <div style="display: flex; flex-direction: column; gap: 6px; margin: 8px 0;">
+            <label style="display: flex; align-items: center; gap: 7px; font-size: 12px; color: #111827; font-weight: 700; cursor: pointer; background: #ffffff; padding: 6px 10px; border-radius: 6px; border: 1.5px solid #cbd5e1;">
+              <input type="checkbox" data-author-field="choiceHideIfChosen" data-choice-index="${index}" ${choice.hideIfChosen !== false ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;" />
+              <span>선택 후 다시 올 때 숨기기 (유저가 이미 선택한 경우 안 보임)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 7px; font-size: 12px; color: #065f46; font-weight: 700; cursor: pointer; background: #ecfdf5; padding: 6px 10px; border-radius: 6px; border: 1.5px solid #a7f3d0;">
+              <input type="checkbox" data-author-field="choiceReturnToHub" data-choice-index="${index}" ${choice.returnToHub ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;" />
+              <span>🔄 선택 후 탐사 허브로 복귀 (returnToHub)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 7px; margin-bottom: 2px; font-size: 12px; color: #b45309; font-weight: 700; cursor: pointer; background: #fffbeb; padding: 6px 10px; border-radius: 6px; border: 1.5px solid #fde68a;">
+              <input type="checkbox" data-author-field="choiceIsConclusion" data-choice-index="${index}" ${choice.isConclusionChoice ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;" />
+              <span>💡 최종 추리/정답 제출 선택지로 지정 (추론 성공 시 황금빛 아우라로 강조)</span>
+            </label>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1.5px solid #e2e8f0;">
+            <div>
+              <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">해금 조건 플래그 (requiresFlags, 쉼표 구분)</label>
+              <input type="text" data-author-field="choiceRequiresFlags" data-choice-index="${index}" value="${escapeHtml(Array.isArray(choice.requiresFlags) ? choice.requiresFlags.join(', ') : (choice.requiresFlags || ''))}" placeholder="예: flag_secret_found, flag_talked" style="width: 100%; padding: 6px 8px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px;" />
+            </div>
+            <div>
+              <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">조건 미달 시 동작 (lockBehavior)</label>
+              <select data-author-field="choiceLockBehavior" data-choice-index="${index}" class="author-select" style="width: 100%; font-size: 12px; padding: 5px 8px;">
+                <option value="hide" ${choice.lockBehavior === 'hide' || choice.lockBehavior === 'hidden' ? 'selected' : ''}>숨김 (조건 충족 전까지 아예 안 보임)</option>
+                <option value="lock" ${choice.lockBehavior === 'lock' || !choice.lockBehavior ? 'selected' : ''}>잠금 (비활성화 상태로 보임)</option>
+              </select>
+            </div>
+            <div style="grid-column: span 2;">
+              <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">선택 시 획득할 플래그 (setFlags, 쉼표 구분)</label>
+              <input type="text" data-author-field="choiceSetFlags" data-choice-index="${index}" value="${escapeHtml(Array.isArray(choice.setFlags) ? choice.setFlags.join(', ') : (choice.setFlags || ''))}" placeholder="예: flag_explored_lab, clue_unlocked" style="width: 100%; padding: 6px 8px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px;" />
+            </div>
+          </div>
           <div class="author-stat-grid">
             ${STAT_FIELDS.map((stat) => {
               const statVal = stat.id === 'social' ? (stats.social ?? stats.persuasion ?? 0) : (stats[stat.id] || 0);
@@ -3325,13 +3395,21 @@ export class AuthorEditor {
             ${field('회차 제목', 'episodeTitle', episode.title || '')}
             ${field('장면 제목', 'storyNodeTitle', node.title || '')}
             ${field('장·절 제목', 'storyChapter', node.chapter || '')}
-            ${field('현위치 장소명 (홈 화면용)', 'storyLocationName', node.locationName || '')}
+            ${field('현위치 장소명 (홈/탐사 허브 요약용)', 'storyLocationName', node.locationName || '', 'text', { attributes: 'list="author-story-location-datalist" placeholder="예: 시계탑 도서관, 온실"' })}
             ${field('이 장면에 도달하면 회차 완료 처리', 'storyCompletesEpisode', Boolean(node.completesEpisode), 'checkbox')}
           </div>
-          <div style="margin-top: 8px; margin-bottom: 12px;">
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #4338ca; font-weight: 700; cursor: pointer; background: #eef2ff; padding: 8px 12px; border-radius: 8px; border: 1.5px solid #c7d2fe;">
+          <datalist id="author-story-location-datalist">
+            ${(typeof MAP_LOCATIONS !== 'undefined' ? MAP_LOCATIONS : []).map((l) => `<option value="${escapeHtml(l.name)}">${escapeHtml(l.name)} (${escapeHtml(l.id)})</option>`).join('')}
+            ${Object.values(typeof INVESTIGATION_SCENES !== 'undefined' ? INVESTIGATION_SCENES : {}).map((s) => `<option value="${escapeHtml(s.title)}">${escapeHtml(s.title)} (${escapeHtml(s.id)})</option>`).join('')}
+          </datalist>
+          <div style="display: flex; gap: 10px; margin-top: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #4338ca; font-weight: 700; cursor: pointer; background: #eef2ff; padding: 8px 12px; border-radius: 8px; border: 1.5px solid #c7d2fe; flex: 1; min-width: 260px;">
               <input type="checkbox" data-author-field="storyIsHubNode" ${node.isHubNode ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;" />
               <span>🧭 에피소드 탐사 허브(HQ 거점) 장면으로 지정 (지도 복귀 시 이동 & 탐사 현황 브리핑 카드 표시)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #065f46; font-weight: 700; cursor: pointer; background: #ecfdf5; padding: 8px 12px; border-radius: 8px; border: 1.5px solid #a7f3d0; flex: 1; min-width: 260px;">
+              <input type="checkbox" data-author-field="storyReturnToHub" ${node.returnToHub ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;" />
+              <span>🔄 이 지점 종료 후 탐사 허브로 복귀 (returnToHub)</span>
             </label>
           </div>
           <div class="author-story-summary-section" style="margin-top: 10px; margin-bottom: 14px;">

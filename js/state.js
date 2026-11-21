@@ -52,6 +52,8 @@ const DEFAULT_STATE = {
     theme: 'sepia'
   },
   history: ['ep1_pocket_intro'],
+  visitedLocations: [],
+  hubReturnSummary: null,
   // 회차 진행 정보 (회차 데이터와 분리되어 모든 회차에서 유지됨)
   completedEpisodes: [],
   schemaVersion: 2
@@ -139,7 +141,9 @@ class GameState {
           unlockedTileRecords: {
             ...DEFAULT_STATE.unlockedTileRecords,
             ...(parsed.unlockedTileRecords && typeof parsed.unlockedTileRecords === 'object' ? parsed.unlockedTileRecords : {})
-          }
+          },
+          visitedLocations: Array.isArray(parsed.visitedLocations) ? parsed.visitedLocations : [],
+          hubReturnSummary: parsed.hubReturnSummary || null
         };
 
         // 도서관을 실제로 방문한 적이 없는 경우 discoveredLocations에서 loc_library 제거 (오표시 보정)
@@ -204,6 +208,10 @@ class GameState {
   // --- Story & Navigation ---
 
   getCurrentNodeId() {
+    return this.data.currentNodeId;
+  }
+
+  getCurrentNode() {
     return this.data.currentNodeId;
   }
 
@@ -329,6 +337,118 @@ class GameState {
     this.data.currentMapTileKey = tileKey;
     this.save();
     this.emit('change', this.data);
+  }
+
+  // --- Exploration & Visited Locations ---
+
+  getVisitedLocations() {
+    this.data.visitedLocations ||= [];
+    return this.data.visitedLocations;
+  }
+
+  recordVisitedLocation(locationNameOrId) {
+    if (!locationNameOrId) return;
+    this.data.visitedLocations ||= [];
+    const name = this.resolveLocationName(locationNameOrId);
+    if (name && !this.data.visitedLocations.includes(name)) {
+      this.data.visitedLocations.push(name);
+      this.save();
+      this.emit('visitedLocationsChanged', this.data.visitedLocations);
+    }
+  }
+
+  resolveLocationName(locationNameOrId) {
+    if (!locationNameOrId) return '';
+    const clean = String(locationNameOrId).trim();
+    const mapLoc = (typeof MAP_LOCATIONS !== 'undefined' ? MAP_LOCATIONS : window.MAP_LOCATIONS)?.find(l => l.id === clean || l.name === clean);
+    if (mapLoc?.name) return mapLoc.name;
+    const scene = (typeof INVESTIGATION_SCENES !== 'undefined' ? INVESTIGATION_SCENES : window.INVESTIGATION_SCENES)?.[clean];
+    if (scene?.title) return scene.title;
+    return clean;
+  }
+
+  getCodexCounts() {
+    const unlocked = this.data.unlockedCodex || {};
+    const codexList = (typeof CODEX_DATA !== 'undefined' ? CODEX_DATA : window.CODEX_DATA) || [];
+    let clues = 0;
+    let chars = 0;
+
+    Object.keys(unlocked).forEach(key => {
+      const val = unlocked[key];
+      if (!val || (typeof val === 'object' && val.unlocked === false)) return;
+      const item = codexList.find(c => c.id === key);
+      if (item) {
+        if (item.category === 'character') chars++;
+        else clues++;
+      } else {
+        let found = false;
+        for (const c of codexList) {
+          if (c.subItems?.some(s => s.id === key)) {
+            if (c.category === 'character') chars++;
+            else clues++;
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          if (key.startsWith('char_')) chars++;
+          else clues++;
+        }
+      }
+    });
+
+    const tileRecs = this.data.unlockedTileRecords || {};
+    clues += Object.keys(tileRecs).length;
+
+    return { clues, chars };
+  }
+
+  recordExplorationBaseline(locationNameOrId = '') {
+    const counts = this.getCodexCounts();
+    this.explorationBaseline = {
+      clues: counts.clues,
+      chars: counts.chars,
+      location: locationNameOrId,
+      time: Date.now()
+    };
+  }
+
+  calculateExplorationDiff(currentLocationNameOrId = '') {
+    const current = this.getCodexCounts();
+    const baseline = this.explorationBaseline || { clues: current.clues, chars: current.chars, location: '' };
+    const newClues = Math.max(0, current.clues - baseline.clues);
+    const newChars = Math.max(0, current.chars - baseline.chars);
+
+    const locName = currentLocationNameOrId || baseline.location;
+    if (locName) {
+      this.recordVisitedLocation(locName);
+    }
+
+    this.explorationBaseline = null;
+    return {
+      newClues,
+      newChars,
+      visitedLocations: [...this.getVisitedLocations()]
+    };
+  }
+
+  setHubReturnSummary(text, diff = null) {
+    this.data.hubReturnSummary = {
+      text,
+      diff,
+      timestamp: Date.now()
+    };
+    this.save();
+    this.emit('hubReturnSummaryChanged', this.data.hubReturnSummary);
+  }
+
+  getHubReturnSummary() {
+    return this.data.hubReturnSummary?.text || null;
+  }
+
+  clearHubReturnSummary() {
+    this.data.hubReturnSummary = null;
+    this.save();
   }
 
   // --- Inventory Management ---
