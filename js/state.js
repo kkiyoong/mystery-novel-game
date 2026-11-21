@@ -521,7 +521,50 @@ class GameState {
   }
 
   isCodexUnlocked(codexId) {
-    return Boolean(this.data.unlockedCodex[codexId] && this.data.unlockedCodex[codexId].unlocked);
+    if (!codexId) return false;
+    return Boolean(
+      (this.data.unlockedCodex[codexId] && this.data.unlockedCodex[codexId].unlocked) ||
+      this.data.flags?.[`unlocked_sub_${codexId}`] ||
+      this.data.flags?.[`codex_${codexId}`] ||
+      this.data.flags?.[codexId]
+    );
+  }
+
+  isSubItemUnlocked(subItemId, subItemLabel = null, parentEntry = null) {
+    if (!subItemId && !subItemLabel) return false;
+
+    // 1. Direct flag or codex unlock
+    if (subItemId && (this.data.flags?.[`unlocked_sub_${subItemId}`] || this.data.unlockedCodex?.[subItemId]?.unlocked)) {
+      return true;
+    }
+    if (subItemLabel && (this.data.flags?.[`unlocked_sub_${subItemLabel}`] || this.data.unlockedCodex?.[subItemLabel]?.unlocked)) {
+      return true;
+    }
+
+    // 2. Tile record unlock by subItem ID or label
+    if (subItemId && this.isTileRecordUnlocked(subItemId)) return true;
+    if (subItemLabel && this.isTileRecordUnlocked(subItemLabel)) return true;
+
+    // 3. Any record belonging to this subItem is unlocked
+    const subItem = parentEntry?.subItems?.find(
+      (s) => s && (s.id === subItemId || s.label === subItemLabel || s.id === subItemLabel || s.label === subItemId)
+    );
+    if (subItem && Array.isArray(subItem.records)) {
+      if (subItem.records.some((r) => r && this.isTileRecordUnlocked(r.id))) {
+        return true;
+      }
+    }
+
+    // 4. Any record in unlockedTileRecords referencing this tileId
+    const records = this.data.unlockedTileRecords || {};
+    for (const rec of Object.values(records)) {
+      if (rec && rec.unlocked) {
+        if (subItemId && (rec.tileId === subItemId || rec.tileId === `sub_${subItemId}`)) return true;
+        if (subItemLabel && rec.tileId === subItemLabel) return true;
+      }
+    }
+
+    return false;
   }
 
   isClueConditionUnlocked(conditionId) {
@@ -547,6 +590,13 @@ class GameState {
     this.data.unlockedTileRecords ||= {};
     this.data.flags ||= {};
     this.data.flags[`tile_rec_${recordId}`] = true;
+
+    // Automatically mark the associated tile as unlocked as well
+    if (tileId) {
+      this.data.flags[`unlocked_sub_${tileId}`] = true;
+      this.data.flags[tileId] = true;
+      this.unlockCodex(tileId);
+    }
 
     if (!this.data.unlockedTileRecords[recordId]) {
       this.data.unlockedTileRecords[recordId] = {

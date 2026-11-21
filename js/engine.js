@@ -846,12 +846,25 @@ export class GameEngine {
           tileId: payload.tileId,
           text: payload.recordText
         });
+        if (payload.tileId) {
+          state.setFlag(`unlocked_sub_${payload.tileId}`, true);
+          state.unlockCodex(payload.tileId);
+        }
+        if (payload.targetTileLabel) {
+          state.setFlag(`unlocked_sub_${payload.targetTileLabel}`, true);
+          state.unlockCodex(payload.targetTileLabel);
+        }
         this.playAudio('codexUnlock');
         if (statusEl) statusEl.textContent = '✨ 새 정보 기록!';
         break;
       }
       case 'subitem': {
         state.setFlag(`unlocked_sub_${payload.subId}`, true);
+        state.unlockCodex(payload.subId);
+        if (payload.finalLabel) {
+          state.setFlag(`unlocked_sub_${payload.finalLabel}`, true);
+          state.unlockCodex(payload.finalLabel);
+        }
         if (payload.parentId) {
           state.unlockCodex(payload.parentId);
         }
@@ -2745,6 +2758,11 @@ export class GameEngine {
 
     if (isNew) {
       state.setFlag(flagKey, true);
+      state.unlockCodex(subId);
+      if (finalLabel) {
+        state.setFlag(`unlocked_sub_${finalLabel}`, true);
+        state.unlockCodex(finalLabel);
+      }
       if (parentEntry) {
         state.unlockCodex(parentEntry.id);
       }
@@ -3012,6 +3030,13 @@ export class GameEngine {
     }
 
     overlay.classList.remove('hidden');
+    overlay.scrollTop = 0;
+    const cardEl = overlay.querySelector('.inspect-modal-card');
+    if (cardEl) cardEl.scrollTop = 0;
+    const modalBody = overlay.querySelector('.inspect-modal-body');
+    if (modalBody) modalBody.scrollTop = 0;
+    if (descEl) descEl.scrollTop = 0;
+    if (monologueTextEl) monologueTextEl.scrollTop = 0;
 
     const closeHandler = () => {
       overlay.classList.add('hidden');
@@ -3612,6 +3637,10 @@ export class GameEngine {
     this.bookReaderModal.classList.remove('hidden');
     this.playAudio('click');
     this.renderBookPage();
+    if (this.bookReaderModal) this.bookReaderModal.scrollTop = 0;
+    const sheetEl = this.bookReaderModal?.querySelector('.book-page-sheet');
+    if (sheetEl) sheetEl.scrollTop = 0;
+    if (this.bookPageContentEl) this.bookPageContentEl.scrollTop = 0;
   }
 
   closeBookReader() {
@@ -3718,8 +3747,17 @@ export class GameEngine {
         this.initNovelTypewriters?.(this.bookPageContentEl);
         this.initStoryQuizzes?.(this.bookPageContentEl);
         this.initStoryExplanationWidgets?.(this.bookPageContentEl);
+        this.initDeferredStoryUnlocks?.(this.bookPageContentEl);
+
+        // Immediately unlock any pending widgets on this book page
+        const pending = Array.from(this.bookPageContentEl.querySelectorAll('.story-game-widget[data-pending-unlock="true"]'));
+        pending.forEach((w) => this.executeDeferredUnlock(w));
       }
       this.bookPageContentEl.scrollTop = 0;
+      const sheetEl = this.bookReaderModal?.querySelector('.book-page-sheet');
+      if (sheetEl) sheetEl.scrollTop = 0;
+      const windowEl = this.bookReaderModal?.querySelector('.book-reader-window');
+      if (windowEl) windowEl.scrollTop = 0;
     }
   }
 }

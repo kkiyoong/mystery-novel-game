@@ -263,6 +263,31 @@ export class MemoBoard {
 
     if (!targetClue || !this.canEnterDeductionMode(targetClue)) return;
 
+    // 최신 상태(State)에서 단서 조건 및 세부 타일 해금 목록 동기화
+    const entry = targetClue.entry || targetClue;
+    if (entry && Array.isArray(entry.subClues)) {
+      targetClue.subClues = entry.subClues.filter(sc =>
+        sc.unlockedByDefault !== false || sc.isUnlocked || (typeof state !== 'undefined' && (state.isClueConditionUnlocked?.(sc.id) || state.isClueConditionUnlocked?.(sc.label)))
+      ).map(sc => ({
+        ...sc,
+        isUnlocked: true,
+        parentEntry: entry,
+        parentId: targetClue.id
+      }));
+    }
+    if (entry && Array.isArray(entry.subItems)) {
+      targetClue.subItems = entry.subItems.filter(si => {
+        if (!si) return false;
+        if (typeof si === 'string') return true;
+        return si.unlockedByDefault !== false || si.isUnlocked || (typeof state !== 'undefined' && state.isSubItemUnlocked?.(si.id, si.label, entry));
+      }).map(si => ({
+        ...(typeof si === 'string' ? { id: `si_${si}`, label: si } : si),
+        isUnlocked: true,
+        parentEntry: entry,
+        parentId: targetClue.id
+      }));
+    }
+
     // 일반 모드에서의 주제 타일 원래 좌표 및 화면 상태를 백업 (추론 모드 종료 시 일반 모드 배치로 깔끔하게 복구하기 위함)
     if (!this.focusedKeywordId && Number.isFinite(targetClue.q) && Number.isFinite(targetClue.r)) {
       this.normalParentBackup.set(targetClue.id, {
@@ -289,6 +314,11 @@ export class MemoBoard {
     const subClues = targetClue.subClues || [];
     const count = subClues.length;
     subClues.forEach((sc, idx) => {
+      sc.parentEntry = targetClue.entry || targetClue;
+      sc.parentId = targetClue.id;
+      sc.role = 'clue';
+      sc.isMidClue = true;
+      sc.sub = '단서';
       const savedSc = this.deductionPositions.get(sc.id);
       if (savedSc && Number.isFinite(savedSc.q) && Number.isFinite(savedSc.r)) {
         sc.q = savedSc.q;
@@ -318,6 +348,11 @@ export class MemoBoard {
     ];
     let slotIdx = 0;
     (targetClue.subItems || []).forEach((item) => {
+      item.parentEntry = targetClue.entry || targetClue;
+      item.parentId = targetClue.id;
+      item.role = 'sub';
+      item.isSubItem = true;
+      item.sub = '세부 타일';
       if (this.eliminatedTileIds.has(item.id)) {
         this.detachedNodes.delete(item.id);
         delete item.q;
@@ -343,8 +378,8 @@ export class MemoBoard {
     });
 
     this.panX = 0;
-    this.panY = 0;
-    this.scale = 0.90;
+    this.panY = 20;
+    this.scale = 0.88;
     this._evaluateAdjacencies();
     this.render();
   }
@@ -590,9 +625,11 @@ export class MemoBoard {
         this.positions.set(clue.id, { q, r });
 
         const rawClues = (Array.isArray(clue.subClues) ? clue.subClues : []).filter(
-          (sc) => sc.unlockedByDefault !== false || sc.isUnlocked
+          (sc) => sc.unlockedByDefault !== false || sc.isUnlocked || (typeof state !== 'undefined' && (state.isClueConditionUnlocked?.(sc.id) || state.isClueConditionUnlocked?.(sc.label)))
         );
-        const rawSubs = Array.isArray(clue.subItems) ? clue.subItems : (clue.keywords || []);
+        const rawSubs = (Array.isArray(clue.subItems) ? clue.subItems : (clue.keywords || [])).filter(
+          (si) => typeof si === 'string' || si.unlockedByDefault !== false || si.isUnlocked || (typeof state !== 'undefined' && state.isSubItemUnlocked?.(si.id, si.label, clue.entry || clue))
+        );
 
         const subClues = rawClues.map((sc, idx) => {
           const id = sc.id || `${clue.id}_sc_${idx}`;
@@ -1439,6 +1476,30 @@ export class MemoBoard {
       // ===== [추론 모드: 상단 주제 + 일정한 간격의 단서 가로 배치 + 1칸 띄우고 세부타일 배치 + 하단 후보 탈락 칸] =====
       const parent = this.clues.find((c) => c.id === this.focusedKeywordId);
       if (parent) {
+        const entry = parent.entry || parent;
+        if (entry && Array.isArray(entry.subClues)) {
+          parent.subClues = entry.subClues.filter(sc =>
+            sc.unlockedByDefault !== false || sc.isUnlocked || (typeof state !== 'undefined' && (state.isClueConditionUnlocked?.(sc.id) || state.isClueConditionUnlocked?.(sc.label)))
+          ).map(sc => ({
+            ...sc,
+            isUnlocked: true,
+            parentEntry: entry,
+            parentId: parent.id
+          }));
+        }
+        if (entry && Array.isArray(entry.subItems)) {
+          parent.subItems = entry.subItems.filter(si => {
+            if (!si) return false;
+            if (typeof si === 'string') return true;
+            return si.unlockedByDefault !== false || si.isUnlocked || (typeof state !== 'undefined' && state.isSubItemUnlocked?.(si.id, si.label, entry));
+          }).map(si => ({
+            ...(typeof si === 'string' ? { id: `si_${si}`, label: si } : si),
+            isUnlocked: true,
+            parentEntry: entry,
+            parentId: parent.id
+          }));
+        }
+
         if (this.dragNode?.id !== parent.id && Number.isFinite(parent.q) && Number.isFinite(parent.r)) {
           const pPos = this.axialToPixel(parent.q, parent.r);
           parent.x = pPos.x;
@@ -1448,6 +1509,11 @@ export class MemoBoard {
         const subClues = parent.subClues || [];
         const count = subClues.length;
         subClues.forEach((sc, idx) => {
+          sc.parentEntry = parent.entry || parent;
+          sc.parentId = parent.id;
+          sc.role = 'clue';
+          sc.isMidClue = true;
+          sc.sub = '단서';
           if (!this.detachedNodes.has(sc.id) || sc.q === undefined) {
             const targetX = (idx - (count - 1) / 2) * 126;
             const targetY = -36.4;
@@ -1472,6 +1538,11 @@ export class MemoBoard {
         ];
         let slotIdx = 0;
         (parent.subItems || []).forEach((item) => {
+          item.parentEntry = parent.entry || parent;
+          item.parentId = parent.id;
+          item.role = 'sub';
+          item.isSubItem = true;
+          item.sub = '세부 타일';
           if (this.eliminatedTileIds.has(item.id)) {
             this.detachedNodes.delete(item.id);
             return;
@@ -1494,8 +1565,14 @@ export class MemoBoard {
 
       // 1. 해당 주제의 독립 타일들 그리기 (단서 조건 및 후보 세부타일들)
       this.detachedNodes.forEach((node) => {
-        const parentId = node.parentEntry?.id || node.parentId || node.clueId;
-        if (parentId !== this.focusedKeywordId && !node.id.startsWith(this.focusedKeywordId)) return;
+        const belongsToFocus =
+          node.parentEntry?.id === this.focusedKeywordId ||
+          node.parentId === this.focusedKeywordId ||
+          node.clueId === this.focusedKeywordId ||
+          node.id.startsWith(this.focusedKeywordId) ||
+          (parent && (parent.subClues || []).some((sc) => sc.id === node.id || sc.label === node.label)) ||
+          (parent && (parent.subItems || []).some((si) => si.id === node.id || si.label === node.label));
+        if (!belongsToFocus) return;
         if (this.eliminatedTileIds.has(node.id)) return;
         if (!Number.isFinite(node.q) || !Number.isFinite(node.r)) return;
 
@@ -1611,7 +1688,7 @@ export class MemoBoard {
     const group = document.createElementNS(SVG_NS, 'g');
     const role = node.role || (isMain ? 'keyword' : 'sub');
     const isMid = role === 'clue' || role === 'condition';
-    const classes = ['memo-node'];
+    const classes = ['memo-node', 'hex-tile'];
 
     if (role === 'keyword' || (isMain && !isMid)) {
       classes.push('is-main');
@@ -1670,7 +1747,7 @@ export class MemoBoard {
 
     const labelLines = wrapLabel(node.label, (role === 'keyword' || (isMain && !isMid)) ? 6 : 5);
     const labelY = labelLines.length > 1 ? node.y - 7 : node.y - 2;
-    appendSvgText(group, 'memo-label', node.x, labelY, labelLines, 10);
+    appendSvgText(group, 'memo-label hex-title', node.x, labelY, labelLines, 10);
 
     let subText = '';
     if (node.validationState === 'unknown') {

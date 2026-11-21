@@ -1053,16 +1053,20 @@ class App {
   }
 
   openDeductionMode(topicId = null) {
-    this.openPocketModal('codex');
-    const clueFilterBtn = document.querySelector('.codex-filter-btn[data-category="clue"]');
-    if (clueFilterBtn) {
-      clueFilterBtn.click();
-    }
     const targetTopic = topicId || 'clue_herb_quiz';
+    state.unlockCodex(targetTopic);
+    this.openPocketModal('codex');
+
+    document.querySelectorAll('.codex-filter-btn').forEach((btn) => {
+      const isClue = btn.dataset.category === 'clue';
+      btn.classList.toggle('is-active', isClue);
+      btn.setAttribute('aria-pressed', String(isClue));
+    });
+    this.activeCodexCategory = 'clue';
+    this.renderCodexList();
+
     if (this.memoBoard) {
-      setTimeout(() => {
-        this.memoBoard.enterFocusMode(targetTopic);
-      }, 50);
+      this.memoBoard.enterFocusMode(targetTopic);
     }
     this.engine.showToast('수첩에서 단서들을 짜맞춰보는 추론 모드입니다.', 'info', '🧩');
   }
@@ -1263,14 +1267,23 @@ class App {
         return sc.unlockedByDefault !== false || state.isClueConditionUnlocked(sc.id) || state.isClueConditionUnlocked(sc.label);
       }).map((sc) => ({
         ...sc,
+        isUnlocked: true,
+        parentEntry: entry,
+        parentId: entry.id,
         isNew: Boolean(state.getUnlockedCodex()[sc.id]?.isNew && !board.readNewIds.has(sc.id))
       }));
 
       const unlockedSubItems = (entry.subItems || []).filter((si) => {
         if (!si) return false;
         if (typeof si === 'string') return true;
-        return si.unlockedByDefault !== false || Boolean(state.getFlag(`unlocked_sub_${si.id}`)) || state.isCodexUnlocked(si.id);
-      });
+        return si.unlockedByDefault !== false || state.isSubItemUnlocked(si.id, si.label, entry);
+      }).map((si) => ({
+        ...(typeof si === 'string' ? { id: `si_${si}`, label: si } : si),
+        isUnlocked: true,
+        parentEntry: entry,
+        parentId: entry.id,
+        isNew: Boolean(state.getUnlockedCodex()[si.id]?.isNew && !board.readNewIds.has(si.id))
+      }));
 
       return {
         ...entry,

@@ -118,7 +118,7 @@ body.theme-dark {
   /* Reader Typography Defaults (Dynamically altered via JS) */
   --novel-font-size: 17px;
   --novel-line-height: 1.85;
-  --novel-letter-spacing: 0px;
+  --novel-letter-spacing: -0.02em;
 }
 
 /* --- 2. Base Reset & Typography --- */
@@ -141,6 +141,11 @@ html, body {
   color: var(--text-main);
   font-family: var(--system-font);
   line-height: 1.6;
+  letter-spacing: -0.02em;
+  word-spacing: normal;
+  text-align: left;
+  word-break: keep-all;
+  overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -440,18 +445,21 @@ a, button, [role="button"], .hotspot-pin, .iso-tile {
   font-family: var(--novel-font-family);
   font-size: var(--novel-font-size);
   line-height: var(--novel-line-height);
-  letter-spacing: var(--novel-letter-spacing);
+  letter-spacing: -0.02em;
+  word-spacing: normal;
   color: var(--text-main);
   margin-bottom: 36px;
-  text-align: justify;
-  text-justify: inter-character;
+  text-align: left;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .novel-p {
   margin-bottom: 1.4em;
   text-indent: 0.8em;
-  text-align: justify;
-  text-justify: inter-character;
+  text-align: left;
+  letter-spacing: -0.02em;
+  word-spacing: normal;
   word-break: keep-all;
   overflow-wrap: break-word;
   transition: color var(--transition-fast);
@@ -1314,6 +1322,10 @@ body.theme-dark .novel-glow-text.novel-glow-green {
   font-size: 14px;
   font-weight: 500;
   text-align: left;
+  letter-spacing: -0.02em;
+  word-spacing: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
   transition: transform 0.15s ease, border-color 0.15s ease;
   position: relative;
   overflow: visible;
@@ -1346,7 +1358,10 @@ body.theme-dark .novel-glow-text.novel-glow-green {
   font-style: normal;
   color: var(--text-muted, #64748b);
   line-height: 1.5;
+  letter-spacing: -0.02em;
+  word-spacing: normal;
   word-break: keep-all;
+  overflow-wrap: break-word;
   display: flex;
   align-items: baseline;
   gap: 5px;
@@ -1376,6 +1391,11 @@ body.theme-dark .novel-glow-text.novel-glow-green {
   min-width: 0;
   color: var(--text-muted, #64748b);
   font-style: normal;
+  text-align: left;
+  letter-spacing: -0.02em;
+  word-spacing: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 /* Choice Stat Feedback Box (Appears under chosen choice on click) */
@@ -1512,6 +1532,11 @@ body.theme-dark .novel-glow-text.novel-glow-green {
   font-weight: 600;
   color: var(--text-main);
   line-height: 1.5;
+  text-align: left;
+  letter-spacing: -0.02em;
+  word-spacing: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .choice-requirement {
@@ -2570,13 +2595,15 @@ body:has(.pocket-drawer-modal.is-open) .pocket-wheel-container {
   background: rgba(10, 15, 26, 0.78);
   z-index: 185;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 20px;
+  overflow-y: auto;
+  padding: 40px 20px 20px;
   backdrop-filter: blur(5px);
 }
 
 .inspect-modal-card {
+  margin: auto;
   width: 100%;
   max-width: 720px;
   max-height: 85vh;
@@ -2604,6 +2631,8 @@ body:has(.pocket-drawer-modal.is-open) .pocket-wheel-container {
   font-weight: 800;
   color: var(--text-main);
   margin-top: 4px;
+  text-align: left;
+  letter-spacing: -0.02em;
 }
 
 .inspect-modal-desc {
@@ -2611,7 +2640,11 @@ body:has(.pocket-drawer-modal.is-open) .pocket-wheel-container {
   line-height: 1.6;
   color: var(--text-muted);
   margin-bottom: 12px;
+  text-align: left;
+  letter-spacing: -0.02em;
+  word-spacing: normal;
   word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 /* Protagonist Monologue Quote Box */
@@ -2648,6 +2681,16 @@ body:has(.pocket-drawer-modal.is-open) .pocket-wheel-container {
 
 .monologue-text {
   font-size: 13.5px;
+  line-height: 1.6;
+  color: #bfdbfe;
+  font-style: italic;
+  text-align: left;
+  letter-spacing: -0.02em;
+  word-spacing: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  margin: 0;
+}
   line-height: 1.6;
   color: #bfdbfe;
   font-style: italic;
@@ -6362,9 +6405,10 @@ body.theme-sepia .honeycomb-empty-icon {
   inset: 0;
   z-index: 1000;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 16px;
+  overflow-y: auto;
+  padding: 24px 16px;
   animation: fadeIn 0.25s ease-out;
 }
 
@@ -6382,6 +6426,7 @@ body.theme-sepia .honeycomb-empty-icon {
 }
 
 .book-reader-window {
+  margin: auto;
   position: relative;
   z-index: 2;
   width: min(94vw, 1040px);
@@ -6534,14 +6579,19 @@ body.theme-sepia .honeycomb-empty-icon {
   font-size: 16.5px;
   line-height: 1.85;
   color: #e2e8f0;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.02em;
+  word-spacing: normal;
+  text-align: left;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .book-paragraph {
   margin: 0;
   text-indent: 1em;
-  text-align: justify;
-  text-justify: inter-character;
+  text-align: left;
+  letter-spacing: -0.02em;
+  word-spacing: normal;
   word-break: keep-all;
   overflow-wrap: break-word;
 }
