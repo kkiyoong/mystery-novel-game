@@ -1243,10 +1243,26 @@ export class GameEngine {
       const rawTopic = parts[0] || '약초 퀴즈';
       const customAnswersStr = parts[1] || '';
       const successMsg = parts[2] || '✨ 정답입니다! 수수께끼를 훌륭하게 해결했습니다.';
-      const nextNodeId = parts[3] || '';
+      let nextNodeId = parts[3] || '';
+      let successSceneId = '';
+      let failSceneId = '';
+
+      if (parts.length >= 6) {
+        nextNodeId = parts[3] || '';
+        successSceneId = parts[4] || nextNodeId;
+        failSceneId = parts[5] || '';
+      } else if (parts.length === 5) {
+        successSceneId = parts[3] || '';
+        failSceneId = parts[4] || '';
+        nextNodeId = successSceneId;
+      } else {
+        successSceneId = parts[3] || '';
+        nextNodeId = successSceneId;
+      }
+
       const parentNode = STORY_NODES[nodeId] || {};
-      const successSceneId = parts[4] || parentNode.successSceneId || nextNodeId || '';
-      const failSceneId = parts[5] || parentNode.failSceneId || '';
+      if (!successSceneId) successSceneId = parentNode.successSceneId || nextNodeId || '';
+      if (!failSceneId) failSceneId = parentNode.failSceneId || '';
 
       const existingTopic = CODEX_DATA.find(c => c.id === rawTopic || c.title === rawTopic || (c.keywords && c.keywords.includes(rawTopic))) ||
                             CODEX_DATA.find(c => c.category === 'clue');

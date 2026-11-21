@@ -1538,6 +1538,8 @@ export class AuthorEditor {
   }
 
   renderUniversalTextToolbar(targetFieldName, { hotspotIndex = '', compact = false } = {}) {
+    const editorEpisodeId = getLiveEpisodeId();
+    const episodeNodes = Object.values(STORY_NODES).filter((entry) => !editorEpisodeId || entry.episodeId === editorEpisodeId);
     const clueTopics = CODEX_DATA.filter((item) => item.category === 'clue' || item.subItems || item.subClues);
     const activeTopicTitle = this.selectedSubItemTopic || clueTopics[0]?.title || '';
     const activeTopic = clueTopics.find((t) => t.title === activeTopicTitle) || clueTopics[0];
@@ -1632,7 +1634,20 @@ export class AuthorEditor {
           <button type="button" class="author-tag-btn" data-author-action="insert-tag:stat" style="color: #111827; font-weight: 700; background: #ffffff; border: 1.5px solid #cbd5e1; font-size: 11px; padding: 3px 7px;">+ ⚡ 능력치 변동</button>
           <button type="button" class="author-tag-btn" data-author-action="insert-tag:explanation" style="color: #111827; font-weight: 700; background: #ffffff; border: 1.5px solid #cbd5e1; font-size: 11px; padding: 3px 7px;">+ 💡 설명창 박스</button>
           <button type="button" class="author-tag-btn" data-author-action="insert-style:condition" style="color: #111827; font-weight: 700; background: #ffffff; border: 1.5px solid #cbd5e1; font-size: 11px; padding: 3px 7px;">+ 🔀 조건 분기</button>
-          <button type="button" class="author-tag-btn" data-author-action="insert-tag:quiz" style="color: #111827; font-weight: 700; background: #ffffff; border: 1.5px solid #cbd5e1; font-size: 11px; padding: 3px 7px;">+ ✍️ 퀴즈 정답란</button>
+          <div style="display: inline-flex; align-items: center; gap: 4px; background: #fffbeb; padding: 2px 6px; border-radius: 6px; border: 1.5px solid #fcd34d; flex-wrap: wrap;">
+            <span style="font-size: 11px; font-weight: 800; color: #92400e;">✍️ 퀴즈란:</span>
+            <span style="font-size: 10.5px; font-weight: 700; color: #166534;">✨정답:</span>
+            <select class="author-select" data-author-field="toolbarQuizSuccessScene" style="background: #ffffff; color: #111827; border: 1px solid #86efac; border-radius: 4px; padding: 2px 4px; font-size: 11px; max-width: 130px;">
+              <option value="">-- 정답 시 이동 --</option>
+              ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}">[본문] ${escapeHtml(n.title || n.id)}</option>`).join('')}
+            </select>
+            <span style="font-size: 10.5px; font-weight: 700; color: #991b1b;">❌오답:</span>
+            <select class="author-select" data-author-field="toolbarQuizFailScene" style="background: #ffffff; color: #111827; border: 1px solid #fca5a5; border-radius: 4px; padding: 2px 4px; font-size: 11px; max-width: 130px;">
+              <option value="">-- 오답 시 이동(선택) --</option>
+              ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}">[본문] ${escapeHtml(n.title || n.id)}</option>`).join('')}
+            </select>
+            <button type="button" class="author-tag-btn" data-author-action="insert-tag:quiz" style="color: #92400e; font-weight: 700; background: #fde68a; border: 1.5px solid #d97706; font-size: 11px; padding: 2px 7px;">+ 퀴즈 정답란</button>
+          </div>
           <button type="button" class="author-tag-btn" data-author-action="insert-tag:briefing" style="color: #1e40af; font-weight: 800; background: #eff6ff; border: 1.5px solid #93c5fd; font-size: 11px; padding: 3px 7px;">+ 🧭 탐사 브리핑 카드</button>
         </div>
 
@@ -1956,7 +1971,20 @@ export class AuthorEditor {
         snippet = `\n[기록: ${targetTileLabel} | ${autoRecId} | 새로 밝혀낸 세부 설명(기록) 내용을 여기에 작성하세요.]\n`;
       }
     } else if (type === 'quiz') {
-      snippet = '\n[정답입력: 약초 퀴즈 | 달빛 이끼, 달빛이끼 | ✨ 정답입니다! 화분의 줄기가 눈부시게 빛나며 마침내 꽃을 피웁니다. | story_1795161633215]\n';
+      const bar = textarea.closest('.author-story-workspace, .author-card, .author-panel-body, .author-universal-toolbar-wrap') || document;
+      const successSelect = bar.querySelector('[data-author-field="toolbarQuizSuccessScene"]') || document.querySelector('[data-author-field="toolbarQuizSuccessScene"]');
+      const failSelect = bar.querySelector('[data-author-field="toolbarQuizFailScene"]') || document.querySelector('[data-author-field="toolbarQuizFailScene"]');
+      const successScene = successSelect?.value || '';
+      const failScene = failSelect?.value || '';
+
+      const topicSelect = bar.querySelector('[data-author-field="toolbarTopicSelect"]') || document.querySelector('[data-author-field="toolbarTopicSelect"]');
+      const topicVal = topicSelect?.value;
+      const topic = (topicVal && topicVal !== '__new__') ? topicVal : '약초 퀴즈';
+      const answers = topic === '약초 퀴즈' ? '달빛 이끼, 달빛이끼' : '정답단어1, 정답단어2';
+      const successMsg = '✨ 정답입니다! 화분의 줄기가 눈부시게 빛나며 마침내 꽃을 피웁니다.';
+      const nextNode = successScene || 'story_1795161633215';
+
+      snippet = `\n[정답입력: ${topic} | ${answers} | ${successMsg} | ${nextNode} | ${successScene} | ${failScene}]\n`;
     } else if (type === 'briefing') {
       snippet = '\n[브리핑카드: story_1795161633215 | 약초 퀴즈]\n';
     }
@@ -2287,17 +2315,71 @@ export class AuthorEditor {
       const parts = quizMatch[1].split('|').map((s) => s.trim());
       const topicName = parts[0] || '약초 퀴즈';
       const ansList = parts[1] || '달빛 이끼, 달빛이끼';
-      const nextNode = parts[3] || '';
+      const successMsg = parts[2] || '✨ 정답입니다! 수수께끼를 훌륭하게 해결했습니다.';
+      let nextNode = parts[3] || '';
+      let successSceneId = '';
+      let failSceneId = '';
+
+      if (parts.length >= 6) {
+        nextNode = parts[3] || '';
+        successSceneId = parts[4] || nextNode;
+        failSceneId = parts[5] || '';
+      } else if (parts.length === 5) {
+        successSceneId = parts[3] || '';
+        failSceneId = parts[4] || '';
+        nextNode = successSceneId;
+      } else {
+        successSceneId = parts[3] || '';
+        nextNode = successSceneId;
+      }
+
+      const parentNode = STORY_NODES[nodeId] || {};
+      if (!successSceneId) successSceneId = parentNode.successSceneId || nextNode || '';
+      if (!failSceneId) failSceneId = parentNode.failSceneId || '';
+
+      const editorEpisodeId = getLiveEpisodeId();
+      const episodeNodes = Object.values(STORY_NODES).filter((entry) => !editorEpisodeId || entry.episodeId === editorEpisodeId);
+
       return `
-        <div class="story-quiz-widget" style="margin: 4px 0; border: 1.5px solid #d4af37; border-radius: 10px; padding: 12px 14px; background: rgba(212, 175, 55, 0.08);">
-          <div class="quiz-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(212,175,55,0.2); padding-bottom:6px; margin-bottom:8px;">
-            <span class="quiz-badge-wrap" style="font-size:12px; font-weight:700; color:#d4af37;">✍️ 퀴즈 정답 입력창: ${escapeHtml(topicName)} (줄 ${lineIdx + 1})</span>
-            <span class="quiz-status-pill" style="font-size:11px; color:var(--text-muted);">정답 판정 텍스트: <code style="color:#b45309; font-weight:700;">${escapeHtml(ansList)}</code></span>
+        <div class="story-quiz-widget" style="margin: 8px 0; border: 1.5px solid #d4af37; border-radius: 10px; padding: 12px 14px; background: rgba(212, 175, 55, 0.08);">
+          <div class="quiz-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(212,175,55,0.2); padding-bottom:6px; margin-bottom:10px;">
+            <span class="quiz-badge-wrap" style="font-size:12.5px; font-weight:800; color:#b45309; display:flex; align-items:center; gap:6px;">
+              <span>✍️ 퀴즈 정답 입력창:</span>
+              <span style="color:#1e293b;">${escapeHtml(topicName)}</span>
+              <span style="font-size:11px; color:#64748b; font-weight:normal;">(본문 줄 ${lineIdx + 1})</span>
+            </span>
+            <span class="quiz-status-pill" style="font-size:11px; color:var(--text-muted);">
+              인정 정답: <code style="color:#b45309; font-weight:700;">${escapeHtml(ansList)}</code>
+            </span>
           </div>
+
+          <!-- 정답/오답 연결 장면 선택 드롭다운 영역 -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; background: #ffffff; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #cbd5e1;">
+            <div>
+              <label style="display: block; font-size: 11.5px; font-weight: 700; color: #166534; margin-bottom: 4px;">✨ 정답 시 이동 장면 (successSceneId)</label>
+              <select class="author-select" data-author-field="change-quiz-branch:${escapeHtml(nodeId)}:${lineIdx}:success" style="width: 100%; font-size: 12px; padding: 5px 8px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 4px;">
+                <option value="">-- 정답 시 이동 장면 선택 --</option>
+                ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}" ${successSceneId === n.id ? 'selected' : ''}>[본문] ${escapeHtml(n.title || n.id)} (${escapeHtml(n.id)})</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="display: block; font-size: 11.5px; font-weight: 700; color: #991b1b; margin-bottom: 4px;">❌ 오답 시 이동 장면 (failSceneId)</label>
+              <select class="author-select" data-author-field="change-quiz-branch:${escapeHtml(nodeId)}:${lineIdx}:fail" style="width: 100%; font-size: 12px; padding: 5px 8px; background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 4px;">
+                <option value="">-- 오답 시 이동 안 함 (현재 장면 유지 및 재입력) --</option>
+                ${episodeNodes.map(n => `<option value="${escapeHtml(n.id)}" ${failSceneId === n.id ? 'selected' : ''}>[본문] ${escapeHtml(n.title || n.id)} (${escapeHtml(n.id)})</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
           <div class="quiz-body" style="font-size:12px; color:var(--text-main);">
-            <p style="margin:0 0 6px 0;">독자가 위 정답 목록 중 하나를 입력하면 정답으로 판정되며${nextNode ? `, 다음 장면(<code>${escapeHtml(nextNode)}</code>)으로 이동할 수 있습니다.` : ' 성공 메시지가 표시됩니다.'}</p>
+            <p style="margin:0 0 6px 0; color:#475569;">
+              독자가 위 정답을 맞추면 
+              <b style="color:#166534;">${successSceneId ? `[${escapeHtml(STORY_NODES[successSceneId]?.title || successSceneId)}]` : '성공 메시지 표시'}</b>(으)로, 
+              틀리면 
+              <b style="color:#991b1b;">${failSceneId ? `[${escapeHtml(STORY_NODES[failSceneId]?.title || failSceneId)}]` : '오답 경고 후 재입력'}</b>(으)로 진행됩니다.
+            </p>
             <div style="display:flex; gap:6px;">
-              <input type="text" disabled placeholder="독자가 정답을 입력할 필드 (예: ${escapeHtml(ansList.split(',')[0] || '')})" style="flex:1; padding:4px 8px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-card); font-size:11.5px;">
+              <input type="text" disabled placeholder="독자가 정답을 입력할 필드 (예: ${escapeHtml(ansList.split(',')[0] || '')})" style="flex:1; padding:5px 8px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-card); font-size:11.5px;">
               <button type="button" disabled style="padding:4px 10px; border-radius:4px; background:#d4af37; border:none; color:#111; font-weight:700; font-size:11.5px;">확인</button>
             </div>
           </div>
@@ -2479,6 +2561,113 @@ export class AuthorEditor {
     }
   }
 
+  updateQuizBranch(nodeId, lineIdx, branchType, sceneId) {
+    const node = STORY_NODES[nodeId];
+    if (!node || !node.paragraphs) return;
+
+    let targetIdx = lineIdx;
+    let line = node.paragraphs[targetIdx];
+    if (!line || !line.match(/^\[(?:정답입력|퀴즈입력|퀴즈|정답판정|QUIZ)\s*:/i)) {
+      targetIdx = node.paragraphs.findIndex(p => p.match(/^\[(?:정답입력|퀴즈입력|퀴즈|정답판정|QUIZ)\s*:/i));
+      if (targetIdx === -1) return;
+      line = node.paragraphs[targetIdx];
+    }
+
+    const match = line.match(/^\[((?:정답입력|퀴즈입력|퀴즈|정답판정|QUIZ))\s*:\s*(.+?)\]$/i);
+    if (!match) return;
+
+    const tagPrefix = match[1];
+    const parts = match[2].split('|').map(s => s.trim());
+    const topicName = parts[0] || '약초 퀴즈';
+    const ansList = parts[1] || '';
+    const successMsg = parts[2] || '✨ 정답입니다! 수수께끼를 훌륭하게 해결했습니다.';
+    let nextNode = parts[3] || '';
+    let successScene = '';
+    let failScene = '';
+
+    if (parts.length >= 6) {
+      nextNode = parts[3] || '';
+      successScene = parts[4] || nextNode;
+      failScene = parts[5] || '';
+    } else if (parts.length === 5) {
+      successScene = parts[3] || '';
+      failScene = parts[4] || '';
+      nextNode = successScene;
+    } else {
+      successScene = parts[3] || '';
+      nextNode = successScene;
+    }
+
+    if (!successScene) successScene = node.successSceneId || nextNode || '';
+    if (!failScene) failScene = node.failSceneId || '';
+
+    if (branchType === 'success') {
+      successScene = sceneId || '';
+      nextNode = successScene || nextNode;
+      if (successScene) node.successSceneId = successScene;
+      else delete node.successSceneId;
+    } else if (branchType === 'fail') {
+      failScene = sceneId || '';
+      if (failScene) node.failSceneId = failScene;
+      else delete node.failSceneId;
+    }
+
+    node.paragraphs[targetIdx] = `[${tagPrefix}: ${topicName} | ${ansList} | ${successMsg} | ${successScene || nextNode} | ${successScene} | ${failScene}]`;
+
+    const textarea = this.content?.querySelector(`[data-author-field="storyParagraphs"]`);
+    if (textarea) {
+      textarea.value = node.paragraphs.join('\n');
+    }
+
+    const succSelects = this.content?.querySelectorAll(`select[data-author-field="storySuccessSceneId"]`);
+    succSelects?.forEach(s => {
+      const nid = s.dataset.quickEditNodeId || this.selectedStoryNodeId;
+      if (nid === nodeId) s.value = successScene;
+    });
+    const failSelects = this.content?.querySelectorAll(`select[data-author-field="storyFailSceneId"]`);
+    failSelects?.forEach(s => {
+      const nid = s.dataset.quickEditNodeId || this.selectedStoryNodeId;
+      if (nid === nodeId) s.value = failScene;
+    });
+
+    this.schedulePersist();
+    this.updateStoryPreview();
+
+    if (this.storyViewMode === 'graph') {
+      this.updateGraphSvgLines();
+    }
+  }
+
+  syncQuizTagsWithNodeBranches(node) {
+    if (!node || !node.paragraphs) return;
+    let changed = false;
+    node.paragraphs = node.paragraphs.map(p => {
+      const m = p.match(/^\[((?:정답입력|퀴즈입력|퀴즈|정답판정|QUIZ))\s*:\s*(.+?)\]$/i);
+      if (!m) return p;
+      const tagPrefix = m[1];
+      const parts = m[2].split('|').map(s => s.trim());
+      const topicName = parts[0] || '약초 퀴즈';
+      const ansList = parts[1] || '';
+      const successMsg = parts[2] || '✨ 정답입니다! 수수께끼를 훌륭하게 해결했습니다.';
+      const nextNode = parts[3] || node.successSceneId || '';
+      const succ = node.successSceneId || nextNode;
+      const fail = node.failSceneId || '';
+      changed = true;
+      return `[${tagPrefix}: ${topicName} | ${ansList} | ${successMsg} | ${succ || nextNode} | ${succ} | ${fail}]`;
+    });
+    if (changed) {
+      const textarea = this.content?.querySelector(`[data-author-field="storyParagraphs"]`);
+      if (textarea) {
+        textarea.value = node.paragraphs.join('\n');
+      }
+      this.schedulePersist();
+      this.updateStoryPreview();
+      if (this.storyViewMode === 'graph') {
+        this.updateGraphSvgLines();
+      }
+    }
+  }
+
   getActiveSceneId(explicitSceneId = null) {
     if (explicitSceneId && INVESTIGATION_SCENES[explicitSceneId]) {
       return explicitSceneId;
@@ -2494,6 +2683,15 @@ export class AuthorEditor {
     if (!control) return;
     const name = control.dataset.authorField || control.dataset.authorAction;
     const value = control.type === 'checkbox' ? control.checked : control.value;
+
+    if (name?.startsWith('change-quiz-branch:')) {
+      const parts = name.split(':');
+      const nodeId = parts[1];
+      const lineIdx = Number(parts[2]);
+      const branchType = parts[3];
+      this.updateQuizBranch(nodeId, lineIdx, branchType, value);
+      return;
+    }
 
     if (control.dataset.authorBookTopic || control.matches('.author-book-topic-select')) {
       const key = control.dataset.authorBookTopic;
@@ -2591,6 +2789,7 @@ export class AuthorEditor {
       if (target) {
         if (value) target.successSceneId = value;
         else delete target.successSceneId;
+        this.syncQuizTagsWithNodeBranches(target);
       }
       return false;
     }
@@ -2599,6 +2798,7 @@ export class AuthorEditor {
       if (target) {
         if (value) target.failSceneId = value;
         else delete target.failSceneId;
+        this.syncQuizTagsWithNodeBranches(target);
       }
       return false;
     }
@@ -3798,6 +3998,43 @@ export class AuthorEditor {
           portYOffset: 100
         });
       }
+      (srcNode.paragraphs || []).forEach(p => {
+        const m = String(p).trim().match(/^\[(?:정답입력|퀴즈입력|퀴즈|정답판정|QUIZ)\s*:\s*(.+?)\]$/i);
+        if (m) {
+          const parts = m[1].split('|').map(s => s.trim());
+          let qSucc = '';
+          let qFail = '';
+          if (parts.length >= 6) {
+            qSucc = parts[4] || parts[3] || '';
+            qFail = parts[5] || '';
+          } else if (parts.length === 5) {
+            qSucc = parts[3] || '';
+            qFail = parts[4] || '';
+          } else {
+            qSucc = parts[3] || '';
+          }
+          if (qSucc && nodeMap.has(qSucc) && !links.some(l => l.fromId === srcNode.id && l.toId === qSucc && l.type === 'success')) {
+            links.push({
+              fromId: srcNode.id,
+              toId: qSucc,
+              type: 'success',
+              label: '퀴즈 정답',
+              choiceIndex: -1,
+              portYOffset: 70
+            });
+          }
+          if (qFail && nodeMap.has(qFail) && !links.some(l => l.fromId === srcNode.id && l.toId === qFail && l.type === 'fail')) {
+            links.push({
+              fromId: srcNode.id,
+              toId: qFail,
+              type: 'fail',
+              label: '퀴즈 오답',
+              choiceIndex: -1,
+              portYOffset: 100
+            });
+          }
+        }
+      });
       (srcNode.choices || []).forEach((ch, chIdx) => {
         let tid = (ch.nextNode || '').replace(/^node:/, '');
         if (nodeMap.has(tid)) {
@@ -3990,6 +4227,8 @@ export class AuthorEditor {
   renderGraphQuickEditPanel(node, episodeNodes) {
     if (!node) return '<p>선택된 장면이 없습니다.</p>';
 
+    const hasQuizWidget = (node.paragraphs || []).some(p => String(p).trim().match(/^\[(?:정답입력|퀴즈입력|퀴즈|정답판정|QUIZ)\s*:/i));
+
     const choicesHtml = (node.choices || []).map((ch, idx) => `
       <div class="author-quick-choice-item" style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 8px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -4054,6 +4293,12 @@ export class AuthorEditor {
             <input type="text" data-author-field="storyLocationName" data-quick-edit-node-id="${escapeHtml(node.id)}" value="${escapeHtml(node.locationName || '')}" style="width: 100%; font-size: 12px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
           </div>
         </div>
+
+        ${hasQuizWidget ? `
+          <div style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 8px; padding: 8px 10px; font-size: 11.5px; color: #92400e; display: flex; align-items: center; gap: 6px;">
+            <span>✍️ <b>본문 퀴즈 위젯 연동:</b> 아래의 정답/오답 시 이동 장면을 지정하면 퀴즈 입력 판정 시 해당 장면으로 자동 이동합니다.</span>
+          </div>
+        ` : ''}
 
         <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 8px 10px;">
           <label style="display: block; font-size: 11px; font-weight: 700; color: #166534; margin-bottom: 3px;">✨ 정답 시 이동 장면 (successSceneId)</label>
@@ -4382,6 +4627,43 @@ export class AuthorEditor {
           portYOffset: 100
         });
       }
+      (srcNode.paragraphs || []).forEach(p => {
+        const m = String(p).trim().match(/^\[(?:정답입력|퀴즈입력|퀴즈|정답판정|QUIZ)\s*:\s*(.+?)\]$/i);
+        if (m) {
+          const parts = m[1].split('|').map(s => s.trim());
+          let qSucc = '';
+          let qFail = '';
+          if (parts.length >= 6) {
+            qSucc = parts[4] || parts[3] || '';
+            qFail = parts[5] || '';
+          } else if (parts.length === 5) {
+            qSucc = parts[3] || '';
+            qFail = parts[4] || '';
+          } else {
+            qSucc = parts[3] || '';
+          }
+          if (qSucc && nodeMap.has(qSucc) && !links.some(l => l.fromId === srcNode.id && l.toId === qSucc && l.type === 'success')) {
+            links.push({
+              fromId: srcNode.id,
+              toId: qSucc,
+              type: 'success',
+              label: '퀴즈 정답',
+              choiceIndex: -1,
+              portYOffset: 70
+            });
+          }
+          if (qFail && nodeMap.has(qFail) && !links.some(l => l.fromId === srcNode.id && l.toId === qFail && l.type === 'fail')) {
+            links.push({
+              fromId: srcNode.id,
+              toId: qFail,
+              type: 'fail',
+              label: '퀴즈 오답',
+              choiceIndex: -1,
+              portYOffset: 100
+            });
+          }
+        }
+      });
       (srcNode.choices || []).forEach((ch, chIdx) => {
         let tid = (ch.nextNode || '').replace(/^node:/, '');
         if (nodeMap.has(tid)) {

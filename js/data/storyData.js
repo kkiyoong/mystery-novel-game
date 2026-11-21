@@ -74,7 +74,9 @@ export const STORY_NODES = {
       }
     ],
     "locationName": "본관 복도",
-    "summary": "새 룸메이트를 만났다. 약초학 강의를 들으러 가자."
+    "summary": "새 룸메이트를 만났다. 약초학 강의를 들으러 가자.",
+    "editorX": 390,
+    "editorY": 50
   },
   "ep1_return_from_investigation": {
     "id": "ep1_return_from_investigation",
@@ -259,7 +261,9 @@ export const STORY_NODES = {
     ],
     "locationName": "약초학 강의실",
     "summary": "약초학 강의실에 도착하니, 화분에서 말하는 식물이 자라났다. 퀴즈를 맞춰야 하는 걸까?",
-    "isHubNode": false
+    "isHubNode": false,
+    "editorX": 730,
+    "editorY": 50
   },
   "story_1795161633215": {
     "id": "story_1795161633215",
@@ -284,9 +288,12 @@ export const STORY_NODES = {
         "nextNode": "action:open_map",
         "isOpenMapTrigger": true,
         "desc": "노바리스 아카데미 지도를 열어 전체 장소와 건물을 살펴본다.",
-        "hideIfChosen": false
+        "hideIfChosen": false,
+        "isConclusionChoice": false
       }
-    ]
+    ],
+    "editorX": 1070,
+    "editorY": 50
   },
   "story_1795179345197": {
     "id": "story_1795179345197",
@@ -317,7 +324,9 @@ export const STORY_NODES = {
           }
         }
       }
-    ]
+    ],
+    "editorX": 1070,
+    "editorY": 810
   },
   "story_1795179565179": {
     "id": "story_1795179565179",
@@ -368,7 +377,9 @@ export const STORY_NODES = {
         },
         "hideIfChosen": false
       }
-    ]
+    ],
+    "editorX": 1070,
+    "editorY": 430
   },
   "story_1795180010121": {
     "id": "story_1795180010121",
@@ -408,7 +419,9 @@ export const STORY_NODES = {
           }
         }
       }
-    ]
+    ],
+    "editorX": 1070,
+    "editorY": 240
   },
   "story_1795180210502": {
     "id": "story_1795180210502",
@@ -452,7 +465,9 @@ export const STORY_NODES = {
         "desc": "선배에게 감사 인사를 건네고 발걸음을 옮긴다.",
         "nextNode": "story_1795192473432"
       }
-    ]
+    ],
+    "editorX": 1410,
+    "editorY": 50
   },
   "story_1795180361145": {
     "id": "story_1795180361145",
@@ -485,7 +500,9 @@ export const STORY_NODES = {
         "desc": "선배에게 감사 인사를 건네고 발걸음을 옮긴다.",
         "nextNode": "story_1795192473432"
       }
-    ]
+    ],
+    "editorX": 1750,
+    "editorY": 50
   },
   "story_1795180742741": {
     "id": "story_1795180742741",
@@ -517,7 +534,9 @@ export const STORY_NODES = {
         "desc": "선배에게 감사 인사를 건네고 발걸음을 옮긴다.",
         "nextNode": "story_1795192473432"
       }
-    ]
+    ],
+    "editorX": 1750,
+    "editorY": 430
   },
   "story_1795185391071": {
     "id": "story_1795185391071",
@@ -562,7 +581,9 @@ export const STORY_NODES = {
         "desc": "선배에게 감사 인사를 건네고 발걸음을 옮긴다.",
         "nextNode": "story_1795192473432"
       }
-    ]
+    ],
+    "editorX": 1750,
+    "editorY": 240
   },
   "story_1795192473432": {
     "id": "story_1795192473432",
@@ -576,7 +597,9 @@ export const STORY_NODES = {
       "[브리핑카드: story_1795161633215 | 약초 퀴즈]"
     ],
     "choices": [],
-    "isHubNode": true
+    "isHubNode": true,
+    "editorX": 390,
+    "editorY": 430
   },
   "story_1795202607078": {
     "id": "story_1795202607078",
@@ -610,6 +633,70 @@ export const STORY_NODES = {
           }
         }
       }
-    ]
+    ],
+    "editorX": 1070,
+    "editorY": 620
+  },
+  "story_1795264818389": {
+    "id": "story_1795264818389",
+    "episodeId": "ep1",
+    "title": "정답 찍기!",
+    "chapter": "약초학 강의실",
+    "locationName": "장소 이름",
+    "summary": "왠지 한 번에 정답을 맞출 수 있을 것 같아.",
+    "paragraphs": [
+      "[정답입력: 약초 퀴즈 | 달빛 이끼, 달빛이끼 | ✨ 정답입니다! 화분의 줄기가 눈부시게 빛나며 마침내 꽃을 피웁니다. | story_1795265012263 | story_1795265012263 | story_1795265081222]"
+    ],
+    "choices": [
+      {
+        "text": "역시 찍기는 어려워.",
+        "nextNode": "ep1_pocket_intro",
+        "desc": "아는 게 없어서 맞출 수 없네."
+      }
+    ],
+    "successSceneId": "story_1795265012263",
+    "failSceneId": "story_1795265081222",
+    "returnToHub": true,
+    "editorX": 50,
+    "editorY": 50
+  },
+  "story_1795265012263": {
+    "id": "story_1795265012263",
+    "episodeId": "ep1",
+    "title": "정답을 맞췄다!",
+    "chapter": "약초학 강의실",
+    "locationName": "약초학 강의실",
+    "summary": "이 장면의 최근 사건 요약을 입력하세요.",
+    "paragraphs": [
+      "정답을 맞추었습니다."
+    ],
+    "choices": [
+      {
+        "text": "다음 장면으로 이동한다.",
+        "nextNode": "ep1_pocket_intro"
+      }
+    ],
+    "completesEpisode": true,
+    "editorX": 390,
+    "editorY": 240
+  },
+  "story_1795265081222": {
+    "id": "story_1795265081222",
+    "episodeId": "ep1",
+    "title": "땡!",
+    "chapter": "약초학 강의실",
+    "locationName": "약초학 강의실",
+    "summary": "이 장면의 최근 사건 요약을 입력하세요.",
+    "paragraphs": [
+      "새 본문을 입력하세요."
+    ],
+    "choices": [
+      {
+        "text": "다음 장면으로 이동한다.",
+        "nextNode": "ep1_pocket_intro"
+      }
+    ],
+    "editorX": 50,
+    "editorY": 240
   }
 };
